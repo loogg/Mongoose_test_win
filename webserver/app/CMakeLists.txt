@@ -1,0 +1,7 @@
+# App 源文件
+
+# 收集当前目录的源文件
+file(GLOB SRCS ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
+
+# 将源文件添加到父作用域变量
+set(ALL_SOURCES ${ALL_SOURCES} ${SRCS} PARENT_SCOPE)
