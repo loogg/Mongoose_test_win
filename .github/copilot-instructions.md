@@ -33,18 +33,147 @@ project/
 │   │   └── main.c                # 调用 web_init()
 │   ├── common/
 │   │   └── mongoose/             # 第三方库（不可修改）
+│   ├── simulate/                 # 模拟器资源文件夹
+│   │   └── Logs/                 # 模拟日志文件
 │   └── net/
 │       ├── webserver_impl.h
 │       ├── webserver_impl.c
 │       ├── webserver_glue.h
-│       └── webserver_glue.c
+│       ├── webserver_glue_sim.c  # 模拟器实现（整个文件 #if !defined(WEBSERVER_USER) 包裹）
+│       └── webserver_glue.c      # 真实设备实现（用户自行创建）
 ├── doc/                          # 功能模块需求文档
 └── Template/                     # 参考代码（不可修改）
 ```
 
 ---
 
-## 三、文档阅读顺序
+## 三、启动测试环境
+
+当用户要求执行测试时，需要**同时启动前端和后端**，让整套系统运行起来。
+
+### 跨平台启动脚本
+
+项目根目录提供了跨平台启动脚本：
+
+| 平台 | 脚本 | 用法 |
+|------|------|------|
+| Windows | `start.ps1` | `.\start.ps1 [-Mode dev\|prod] [-NoBrowser]` |
+| Linux/macOS | `start.sh` | `./start.sh [dev\|prod] [--no-browser]` |
+| Windows 快捷方式 | `start-dev.bat` / `start-prod.bat` | 双击运行 |
+
+**脚本功能**：
+- **开发模式** (`dev`)：启动后端 + Vite 开发服务器（HMR）
+- **生产模式** (`prod`)：构建前端 → 打包到 C 文件 → 编译后端 → 启动服务
+- 自动停止旧进程、检查依赖、监控服务状态
+- 支持 `Ctrl+C` 优雅退出并清理进程
+
+**使用示例**：
+```powershell
+# Windows PowerShell
+.\start.ps1 -Mode dev          # 开发模式，打开浏览器
+.\start.ps1 -Mode prod -NoBrowser  # 生产模式，不打开浏览器
+
+# Linux/macOS Bash
+chmod +x start.sh              # 首次添加执行权限
+./start.sh dev                 # 开发模式
+./start.sh prod --no-browser   # 生产模式
+```
+
+### 手动启动步骤
+
+如需手动启动（不使用脚本）：
+
+**1. 启动后端（模拟器）**：
+```powershell
+Stop-Process -Name "demo" -ErrorAction SilentlyContinue
+cd D:\Learning\Mongoose\test_win\build
+$env:Path = "D:\msys64\mingw64\bin;" + $env:Path
+cmake --build . --target demo
+cd D:\Learning\Mongoose\test_win  # 从项目根目录启动
+.\build\bin\demo.exe
+```
+
+**2. 启动前端（Vite 开发服务器）**：
+```powershell
+cd D:\Learning\Mongoose\test_win\webroot
+npm run dev  # 后台运行，默认端口 5173
+```
+
+### 访问地址
+
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| 前端开发服务器 | http://localhost:5173 | Vite HMR，API 代理到后端 |
+| 前端（局域网） | http://192.168.x.x:5173 | 手机等设备访问（需配置 `host: true`） |
+| 后端模拟器 | http://localhost:80 | Mongoose HTTP 服务 |
+
+### 注意事项
+- 两个服务都应以后台模式启动（`isBackground: true`）
+- **后端必须从项目根目录启动**，以便正确解析模拟器资源路径
+- 前端 Vite 配置了代理，`/api/*` 请求会转发到后端
+- **Vite 需配置 `server.host: true`** 才能从外部设备访问（默认只监听 localhost）
+- 停止测试时，需要同时停止两个进程
+
+---
+
+## 四、参考实现
+
+实现时参考 `Template/` 目录下的例子：
+
+| 参考文件 | 参考内容 |
+|----------|----------|
+| `device-dashboard/net.c` | 认证流程、Cookie 处理、API 路由、OTA 分块上传 |
+| `device-dashboard/main.c` | web_init 初始化、mg_mgr 使用 |
+| `mongoose_wizard/mongoose/mongoose_glue.c` | Glue 层架构、业务回调模式 |
+
+**注意**：Template 目录只读，不可修改，仅作参考。
+
+---
+
+## 五、构建与打包
+
+**开发模式**：
+```bash
+cd webroot && npm run dev  # Vite 开发服务器
+# vite.config.ts 需配置：
+# - server.host: true (允许外部访问)
+# - server.proxy (API 代理到后端)
+```
+
+**生产构建**：
+```bash
+# 1. 构建前端
+cd webroot && npm run build
+
+# 2. 打包到 C 文件（Bash 语法，在项目根目录执行）
+node pack.js webroot/dist/*:web_root/ certs/*:certs/ > webserver/net/webserver_packedfs.c
+
+# PowerShell 需手动展开文件列表（见 start.ps1 实现）
+```
+
+**说明**：
+- `pack.js` 位于项目根目录，将前端资源打包为 C 数组
+- Bash 会自动递归展开通配符 `*`；PowerShell 需使用 `Get-ChildItem -Recurse`
+- 启动脚本 `start.ps1`/`start.sh` 会自动执行上述步骤
+- `public/` 目录下的文件会被 Vite 复制到 `dist/`，无需单独处理
+
+**Vite 配置要点**：
+```typescript
+// vite.config.ts
+export default defineConfig({
+  server: {
+    host: true,  // 监听所有网卡，允许手机等外部设备访问
+    proxy: {
+      '/api': 'http://localhost:80',  // API 代理到后端
+      '/ws': { target: 'ws://localhost:80', ws: true }
+    }
+  }
+})
+```
+
+---
+
+## 六、文档阅读顺序
 
 | 顺序 | 文档 | 目的 |
 |------|------|------|
@@ -58,7 +187,7 @@ project/
 
 ---
 
-## 四、后端职责划分
+## 七、后端职责划分
 
 ### webserver_glue.h
 ```c
@@ -136,7 +265,7 @@ void ws_broadcast(struct mg_mgr *mgr, const char *json);
 
 ---
 
-## 五、认证流程
+## 八、认证流程
 
 ```c
 static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
@@ -196,7 +325,7 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
 ---
 
-## 六、用户表与权限
+## 九、用户表与权限
 
 ```c
 static struct user s_users[] = {
@@ -216,7 +345,7 @@ static struct user s_users[] = {
 
 ---
 
-## 七、响应格式
+## 十、响应格式
 
 ### HTTP 层（协议级错误）
 
@@ -264,7 +393,7 @@ void api_reply_fail(struct mg_connection *c, int code, const char *message) {
 
 ---
 
-## 八、错误码处理（重要！）
+## 十一、错误码处理（重要！）
 
 ### 后端
 
@@ -307,7 +436,7 @@ if (!res.ack) {
 
 ---
 
-## 九、前端国际化规范
+## 十二、前端国际化规范
 
 ### 所有用户可见文本必须使用 i18n
 
@@ -343,7 +472,7 @@ const options = [
 
 ---
 
-## 十、前端权限控制
+## 十三、前端权限控制
 
 登录响应返回用户权限级别：
 ```json
@@ -367,7 +496,7 @@ const visibleMenus = navItems.filter(item => user.level >= item.minLevel);
 
 ---
 
-## 十一、WebSocket 推送
+## 十四、WebSocket 推送
 
 ### 连接管理
 ```c
@@ -417,7 +546,7 @@ function useWebSocket() {
 
 ---
 
-## 十二、文件上传
+## 十五、文件上传
 
 采用分块方式：
 ```
@@ -429,7 +558,7 @@ Content-Type: application/octet-stream
 
 ---
 
-## 十三、HTTP 短连接
+## 十六、HTTP 短连接
 
 为节省嵌入式设备资源，HTTP 使用短连接模式：
 
@@ -444,7 +573,7 @@ if (!c->is_websocket) {
 
 ---
 
-## 十四、文件下载
+## 十七、文件下载
 
 通过 API 下载非 webroot 目录下的文件：
 
@@ -467,39 +596,30 @@ if (!c->is_websocket) {
 
 ---
 
-## 十五、模拟器模式
+## 十八、模拟器模式
 
-项目支持在 Windows 上作为模拟器运行。
+项目支持在 Windows 上作为模拟器运行，便于前端开发和调试。
 
+**架构设计**：模拟器代码完全独立在 `webserver_glue_sim.c` 文件中。
+
+| 模式 | 宏定义 | 使用文件 |
+|------|--------|----------|
+| 模拟器 | 未定义 `WEBSERVER_USER` | `webserver_glue_sim.c` |
+| 真实设备 | 定义 `WEBSERVER_USER` | `webserver_glue.c`（用户自己创建） |
+
+**切换方式**：在 `mongoose_config.h` 中添加或注释：
 ```c
-// 默认：模拟器模式
-// 定义 WEBSERVER_USER 宏：真实设备模式
-
-#if defined(WEBSERVER_USER)
-    // 真实设备：用户自行实现数据获取和推送
-#else
-    // 模拟器：返回模拟数据
-#endif
+// #define WEBSERVER_USER  // 取消注释则使用真实设备实现
 ```
 
-模拟器定时推送：
-```c
-#if !defined(WEBSERVER_USER)
-static void timer_sim_status_fn(void *arg) {
-    struct mg_mgr *mgr = (struct mg_mgr *)arg;
-    char json[256];
-    mg_snprintf(json, sizeof(json), "{\"type\":\"status\",\"data\":{...}}");
-    ws_broadcast(mgr, json);
-}
-
-// web_init() 中注册定时器（仅模拟器）
-mg_timer_add(mgr, 5000, MG_TIMER_REPEAT, timer_sim_status_fn, mgr);
-#endif
-```
+**模拟器文件特点**：
+- 整个文件被 `#if !defined(WEBSERVER_USER)` 包裹
+- 不定义宏时正常编译，定义宏时整个文件为空
+- 包含完整的模拟数据和 API 处理逻辑，可作为真实设备实现的参考
 
 ---
 
-## 十六、Context7 文档查询
+## 十九、Context7 文档查询
 
 实现功能时，**必须使用 Context7 查询相关库的最新文档**：
 
@@ -531,53 +651,65 @@ get-library-docs("/cesanta/mongoose", topic="json")
 
 ---
 
-## 十七、关键设计要点
+## 二十、关键设计要点
 
 1. **HTTP 短连接** - 应答完成后 `c->is_draining = 1` 关闭连接
 2. **WebSocket 广播** - 使用 `c->is_websocket` 判断
-3. **Glue 层分离** - impl 处理协议，glue 处理业务
-4. **所有 API 需登录** - 除静态资源外，统一鉴权
-5. **错误码国际化** - 前端使用 `error.code` 查找翻译
-6. **所有文本国际化** - 不允许硬编码中文/英文
-7. **权限双重校验** - 前端过滤菜单 + 后端 API 校验
-8. **Context7 查询** - 使用库 API 前先查询最新文档
+3. **Glue 层分离** - impl 处理协议，sim/glue 处理业务
+4. **模拟器独立文件** - `webserver_glue_sim.c` 整个文件用 `#if !defined(WEBSERVER_USER)` 包裹
+5. **所有 API 需登录** - 除静态资源外，统一鉴权
+6. **错误码国际化** - 前端使用 `error.code` 查找翻译
+7. **所有文本国际化** - 不允许硬编码中文/英文
+8. **权限双重校验** - 前端过滤菜单 + 后端 API 校验
+9. **Context7 查询** - 使用库 API 前先查询最新文档
 ---
 
-## 十八、常见问题与最佳实践
+## 二十一、常见问题与最佳实践
 
-### 18.1 后端条件编译顺序
+### 21.1 模拟器与真实设备分离
 
-**问题**：模拟器代码和真实设备代码混杂，不便于参照实现。
+**问题**：模拟器代码和真实设备代码混杂在同一文件中，不便于参照实现。
 
-**规范**：统一使用 `#if !defined(WEBSERVER_USER)` 模拟器在前，真实设备在 `#else`：
+**规范**：使用独立文件分离模拟器和真实设备代码：
 
+| 文件 | 用途 | 条件编译 |
+|------|------|----------|
+| `webserver_glue_sim.c` | 模拟器实现 | 整个文件 `#if !defined(WEBSERVER_USER)` 包裹 |
+| `webserver_glue.c` | 真实设备实现 | 用户参照 sim.c 自行编写 |
+
+**模拟器文件结构**：
 ```c
-static void handle_xxx(struct mg_connection *c,
-                       struct mg_http_message *hm,
-                       struct user *u) {
-    (void) u;
+// webserver_glue_sim.c
+#include "webserver_glue.h"
+#include "webserver_impl.h"
 
 #if !defined(WEBSERVER_USER)
-    // 模拟器实现（作为参考示例）
-    char json[256];
-    mg_snprintf(json, sizeof(json), "{\"key\":%m}", MG_ESC(value));
-    api_reply_ok(c, json);
-#else
-    // 真实设备实现（用户参照模拟器代码填充）
-    (void) hm;
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
-}
+
+// 模拟数据
+static const char *s_device_name = "示教器-01";
+// ...
+
+// API 处理函数
+static void handle_dashboard(...) { ... }
+static void handle_settings_get(...) { ... }
+
+// API 注册表
+struct api_handler s_api_handlers[] = { ... };
+
+// 初始化
+void web_init(struct mg_mgr *mgr) { ... }
+
+#endif  // !WEBSERVER_USER
 ```
 
-**好处**：
-- 模拟器代码在前，阅读更直观
-- 对接真实设备时，可直接参照上方模拟器代码
-- 编译时定义 `WEBSERVER_USER` 宏即可切换模式
+**对接真实设备**：
+1. 在 `mongoose_config.h` 中定义 `#define WEBSERVER_USER`
+2. 创建 `webserver_glue.c`，参照 `webserver_glue_sim.c` 实现
+3. 模拟器文件编译后为空，不影响最终固件
 
 ---
 
-### 18.2 临时生效 vs 持久保存
+### 21.2 临时生效 vs 持久保存
 
 **问题**：某些设置（如调试开关）只是临时生效，重启后丢失，需要区分"即时修改"和"持久保存"。
 
@@ -605,7 +737,7 @@ static void handle_xxx(struct mg_connection *c,
 
 ---
 
-### 18.3 前端固定高度布局
+### 21.3 前端固定高度布局
 
 **问题**：当页面内容过多时，侧边栏底部的用户信息区域被推出视口，无法看到。
 
@@ -644,7 +776,7 @@ static void handle_xxx(struct mg_connection *c,
 
 ---
 
-### 18.4 错误码国际化实现
+### 21.4 错误码国际化实现
 
 **问题**：后端返回的 error.message 是英文，直接显示给用户不友好。
 
@@ -689,7 +821,7 @@ if (!res.ack) {
 
 ---
 
-### 18.5 API 路由注册顺序
+### 21.5 API 路由注册顺序
 
 **问题**：更具体的路由被更通用的路由拦截。
 
@@ -707,7 +839,7 @@ if (!res.ack) {
 
 ---
 
-### 18.6 下拉选项使用 labelKey
+### 21.6 下拉选项使用 labelKey
 
 **问题**：下拉选项硬编码 label 文本，无法国际化。
 
@@ -728,3 +860,247 @@ const options = [
   <option value={opt.value}>{t(opt.labelKey)}</option>
 ))}
 ```
+
+---
+
+### 21.7 状态存储 i18n key 而非翻译文本
+
+**问题**：将翻译后的文本存入 state，切换语言后不会更新。
+
+**典型错误场景**：
+```typescript
+// ❌ 错误：存储翻译后的文本
+const [error, setError] = useState('');
+
+// 设置错误时已经翻译了
+if (!username) {
+  setError(t('login.required'));  // 存的是 "请输入用户名" 或 "Please enter username"
+}
+
+// 渲染时直接显示，切换语言后不会变
+{error && <div>{error}</div>}
+```
+
+**规范**：状态中存储翻译 key，渲染时动态翻译：
+```typescript
+// ✅ 正确：存储 key
+const [errorKey, setErrorKey] = useState<string | null>(null);
+
+// 设置时存 key
+if (!username) {
+  setErrorKey('login.required');  // 存的是 key
+}
+
+// 渲染时翻译，语言切换会自动更新
+{errorKey && <div>{t(errorKey)}</div>}
+```
+
+**适用场景**：
+- 表单验证错误信息
+- 操作结果提示（成功/失败）
+- 任何需要在 UI 中显示且可能跨语言切换的动态文本
+
+**例外**：API 返回的 error.message（英文）可直接存储，但显示时应优先使用 `getErrorMessage(code)` 查找翻译。
+
+---
+
+### 21.8 应用图标与标签页配置
+
+**问题**：使用 Vite 默认图标，不符合应用主题。
+
+**规范**：创建应用专属图标并配置：
+
+**1. 创建图标文件** `webroot/public/console.svg`：
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- 应用主题相关的 SVG 图标 -->
+</svg>
+```
+
+**2. 配置 `webroot/index.html`**：
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/console.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>设备控制台</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+```
+
+**关键配置**：
+| 属性 | 说明 | 示例值 |
+|------|------|--------|
+| `lang` | 默认语言 | `zh-CN` |
+| `link[rel="icon"]` | 应用图标 | `/console.svg` |
+| `title` | 标签页标题 | `设备控制台` |
+
+**注意**：
+- 图标使用 SVG 格式，支持缩放且文件小
+- 图标设计应与应用主题一致（如控制台应用使用终端/控制面板图标）
+- 不要使用框架默认图标（如 Vite 的闪电图标）
+
+---
+
+### 21.9 模拟器资源路径约定
+
+**问题**：模拟器资源文件路径写死相对于 `build/bin/` 目录，导致 VSCode 调试时找不到文件。
+
+**规范**：模拟器所有资源文件路径使用**相对于项目根目录**的路径：
+
+```c
+// ✅ 正确：相对于项目根目录（VSCode 调试时工作目录）
+#define SIM_LOGS_DIR "webserver/simulate/Logs"
+
+// ❌ 错误：相对于 build/bin 目录
+#define SIM_LOGS_DIR "../../webserver/simulate/Logs"
+```
+
+**目录结构**：
+```
+project/
+├── webserver/
+│   └── simulate/           # 模拟器资源目录
+│       └── Logs/           # 模拟日志文件
+├── build/
+│   └── bin/
+│       └── demo.exe        # 编译产物
+```
+
+**说明**：
+- VSCode 调试时，工作目录默认是项目根目录
+- 命令行启动时，需在项目根目录执行 `./build/bin/demo.exe`
+
+---
+
+### 21.10 页面 API 数据聚合原则
+
+**问题**：页面初始加载需要多次 API 请求，且实时数据需要等 WebSocket 推送才能显示。
+
+**规范**：页面主 API 应返回该页面所需的**全部初始数据**，包括：
+- 静态配置数据
+- 关联模块数据
+- WebSocket 推送数据的初始快照
+
+**示例（Dashboard）**：
+
+```c
+// /api/dashboard 返回完整数据
+{
+    "device": {...},      // 设备信息
+    "network": {...},     // 网络信息
+    "tool": {...},        // 工具信息（原本需要单独请求 /api/tool）
+    "status": {           // WebSocket 推送的初始状态
+        "timestamp": 1234567890,
+        "tz_offset": 8,
+        "sram_used": 45,
+        "sram_max": 67,
+        "tool_state": 2,
+        "tool_change": false
+    }
+}
+```
+
+**前端处理**：
+```typescript
+// ✅ 正确：一次请求获取全部数据
+getDashboard().then(res => {
+    setDashboard(res.data);
+    setTool(res.data.tool);           // 从 dashboard 响应初始化
+    setStatus(res.data.status);        // 初始状态，无需等 WebSocket
+});
+
+// ❌ 错误：多次请求
+Promise.all([getDashboard(), getTool()]).then(...);  // 浪费请求
+// 且 status 需要等 WebSocket 推送才有数据
+```
+
+**优点**：
+- 减少 HTTP 请求次数
+- 页面首次渲染即显示完整状态
+- WebSocket 仅用于后续实时更新
+
+---
+
+### 21.11 启动脚本编写规范
+
+**问题**：PowerShell 脚本包含中文时，通过 cmd/bat 调用会出现编码乱码错误。
+
+**规范**：
+
+**1. PowerShell 脚本使用纯英文**：
+```powershell
+# ✅ 正确：纯英文
+Write-Host "[+] Backend started"
+Write-Host "  Mode: Development"
+
+# ❌ 错误：包含中文（cmd 调用时乱码）
+Write-Host "✓ 后端已启动"
+Write-Host "  模式: 开发模式"
+```
+
+**2. bat 调用 ps1 使用 -Command 方式**：
+```bat
+@echo off
+cd /d "%~dp0"
+REM ✅ 正确：使用 -Command 调用
+powershell -ExecutionPolicy Bypass -Command "& '%~dp0start.ps1' -Mode dev"
+pause
+
+REM ❌ 错误：-File 方式传参可能有问题
+powershell -ExecutionPolicy Bypass -File "%~dp0start.ps1" -Mode dev
+```
+
+**3. 脚本文件结构**：
+
+| 文件 | 用途 |
+|------|------|
+| `start.ps1` | 主脚本（PowerShell，纯英文） |
+| `start-dev.bat` | 开发模式快捷方式（双击运行） |
+| `start-prod.bat` | 生产模式快捷方式（双击运行） |
+
+**4. 脚本参数设计**：
+```powershell
+param(
+    [ValidateSet("dev", "prod")]
+    [string]$Mode = "dev",
+    [switch]$NoBrowser
+)
+```
+
+---
+
+### 21.12 文件下载必须指定 filename
+
+**问题**：使用 `Content-Disposition: attachment` 下载文件时，浏览器显示文件名为 "download" 而不是实际文件名。
+
+**原因**：`Content-Disposition` 头只有 `attachment`，缺少 `filename` 参数。
+
+**规范**：
+
+```c
+// ❌ 错误：缺少 filename，浏览器显示 "download"
+struct mg_http_serve_opts opts = {0};
+opts.extra_headers = "Content-Disposition: attachment\r\n";
+mg_http_serve_file(c, hm, path, &opts);
+
+// ✅ 正确：指定 filename，浏览器显示实际文件名
+char headers[256];
+mg_snprintf(headers, sizeof(headers),
+            "Content-Disposition: attachment; filename=\"%s\"\r\n", filename);
+
+struct mg_http_serve_opts opts = {0};
+opts.extra_headers = headers;
+mg_http_serve_file(c, hm, path, &opts);
+```
+
+**注意事项**：
+- `filename` 用双引号包裹，防止特殊字符问题
+- 如果文件名包含非 ASCII 字符，需使用 `filename*=UTF-8''xxx` 格式（RFC 5987）
+- `headers` 缓冲区必须在 `mg_http_serve_file` 调用期间有效（不能是已释放的内存）

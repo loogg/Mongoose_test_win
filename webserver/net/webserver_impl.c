@@ -135,7 +135,7 @@ void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
         // Static files
         else {
             struct mg_http_serve_opts opts = {0};
-#if MG_ARCH == MG_ARCH_UNIX || MG_ARCH == MG_ARCH_WIN32
+#if !defined(BUILD_PACKED_FS)
             opts.root_dir = "webroot/dist";  // Development: use filesystem
 #else
             opts.root_dir = "/web_root";     // Embedded: use packed files

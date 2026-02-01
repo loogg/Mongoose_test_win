@@ -17,11 +17,25 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch initial data
-    Promise.all([getDashboard(), getTool()])
-      .then(([dashRes, toolRes]) => {
-        if (dashRes.ack && dashRes.data) setDashboard(dashRes.data);
-        if (toolRes.ack && toolRes.data) setTool(toolRes.data);
+    // Fetch all dashboard data in one request (includes tool and initial status)
+    getDashboard()
+      .then((res) => {
+        if (res.ack && res.data) {
+          setDashboard(res.data);
+          // Initialize tool from dashboard response
+          setTool(res.data.tool);
+          // Initialize status from dashboard response
+          setStatus({
+            tool_state: res.data.status.tool_state,
+            tool_change: res.data.status.tool_change,
+            sram_used: res.data.status.sram_used,
+            sram_max: res.data.status.sram_max,
+            sdram_used: res.data.status.sdram_used,
+            sdram_max: res.data.status.sdram_max,
+            time: res.data.status.timestamp,
+            tz_offset: res.data.status.tz_offset,
+          });
+        }
       })
       .finally(() => setLoading(false));
 
@@ -30,7 +44,7 @@ export function DashboardPage() {
       const msg = data as StatusPush;
       if (msg.type === 'status') {
         setStatus(msg.data);
-        // Update tool state from WebSocket
+        // Update tool state from WebSocket when tool_change is true
         if (msg.data.tool_change) {
           getTool().then((res) => {
             if (res.ack && res.data) setTool(res.data);

@@ -8,19 +8,26 @@ export function LoginPage() {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [errorKey, setErrorKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
-    setError('');
+    setErrorKey(null);
+
+    // Custom validation
+    if (!username.trim() || !password.trim()) {
+      setErrorKey('login.required');
+      return;
+    }
+
     setLoading(true);
 
     try {
       await login(username, password);
       window.location.href = '/';
     } catch {
-      setError(t('login.error'));
+      setErrorKey('login.error');
     } finally {
       setLoading(false);
     }
@@ -78,12 +85,12 @@ export function LoginPage() {
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">👤</span>
                 <input
+                  key={`username-${lang}`}
                   type="text"
                   value={username}
                   onInput={(e) => setUsername((e.target as HTMLInputElement).value)}
                   class="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 hover:bg-white"
-                  placeholder="Enter username"
-                  required
+                  placeholder={t('login.usernamePlaceholder')}
                 />
               </div>
             </div>
@@ -95,19 +102,19 @@ export function LoginPage() {
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔒</span>
                 <input
+                  key={`password-${lang}`}
                   type="password"
                   value={password}
                   onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
                   class="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 hover:bg-white"
-                  placeholder="Enter password"
-                  required
+                  placeholder={t('login.passwordPlaceholder')}
                 />
               </div>
             </div>
 
-            {error && (
+            {errorKey && (
               <div class="bg-red-50 text-red-600 text-sm text-center py-3 px-4 rounded-xl border border-red-100">
-                ⚠️ {error}
+                ⚠️ {t(errorKey as any)}
               </div>
             )}
 

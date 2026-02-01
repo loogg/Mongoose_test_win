@@ -1,11 +1,15 @@
 // Copyright (c) 2026
-// Web Server Glue Layer - Business logic, user management, API handlers
+// Web Server Glue Layer - Simulator Implementation
+// This file is only compiled when WEBSERVER_USER is NOT defined.
+// For real device, create your own webserver_glue.c based on this file.
 
 #include "webserver_glue.h"
 #include "webserver_impl.h"
 
 #include <string.h>
 #include <time.h>
+
+#if !defined(WEBSERVER_USER)
 
 // -----------------------------------------------------------------------------
 // Static Variables
@@ -25,7 +29,6 @@ static struct user s_users[] = {
 // -----------------------------------------------------------------------------
 // Simulator Data (for Windows development)
 // -----------------------------------------------------------------------------
-#if !defined(WEBSERVER_USER)
 
 // Simulated device info
 static const char *s_device_name = "示教器-01";
@@ -36,7 +39,7 @@ static const char *s_device_ip = "192.168.1.100";
 static const char *s_device_mac = "AA:BB:CC:DD:EE:FF";
 
 // Simulated tool info
-static int s_tool_state = 2;  // 0=offline, 1=connecting, 2=online
+static int s_tool_state = 1;  // 0=offline, 1=connecting, 2=online
 static bool s_tool_change = false;
 static const char *s_tool_name = "工具-01";
 static const char *s_tool_firmware = "1.2.0";
@@ -97,16 +100,14 @@ static struct {
     bool io, mbtcp, op, tool, screen;
 } s_op_log = {0};
 
-// Log module: Simulated log entries
+// Log module: Memory log entries (file logs are read from simulate/Logs directory)
 static struct {
     const char *name;
     int size;
-    const char *type;  // "file" or "memory"
-} s_logs[] = {
-    {"system.log", 102400, "file"},
-    {"error.log",  20480,  "file"},
-    {"boot.log",   8192,   "memory"},
-    {"recent.log", 16384,  "memory"},
+    const char *type;  // "memory" only - file logs are dynamic
+} s_memory_logs[] = {
+    {"boot.log",    8192,   "memory"},
+    {"recent.log",  16384,  "memory"},
     {NULL, 0, NULL}
 };
 
@@ -137,8 +138,6 @@ static char s_device_name_buf[64] = "示教器-01";
 static char s_device_hardware_buf[32] = "2.0";
 static char s_device_serial_buf[32] = "SN123456";
 static char s_device_ip_buf[20] = "192.168.1.100";
-
-#endif  // !WEBSERVER_USER
 
 // -----------------------------------------------------------------------------
 // Authentication
@@ -182,21 +181,47 @@ static void handle_dashboard(struct mg_connection *c,
     (void) hm;
     (void) u;
 
-#if !defined(WEBSERVER_USER)
-    // Simulator: return mock data
-    char json[512];
-    mg_snprintf(json, sizeof(json),
-        "{\"device\":{\"name\":%m,\"firmware\":%m,\"hardware\":%m,\"serial\":%m},"
-        "\"network\":{\"ip\":%m,\"mac\":%m}}",
-        MG_ESC(s_device_name), MG_ESC(s_device_firmware),
-        MG_ESC(s_device_hardware), MG_ESC(s_device_serial),
-        MG_ESC(s_device_ip), MG_ESC(s_device_mac));
+    char json[1024];
+    time_t now = time(NULL);
+
+    // Return all dashboard data in one response:
+    // - device info
+    // - network info
+    // - tool info (initial state)
+    // - real-time status (same as WebSocket push, for initial load)
+    if (s_tool_state == 0) {
+        mg_snprintf(json, sizeof(json),
+            "{\"device\":{\"name\":%m,\"firmware\":%m,\"hardware\":%m,\"serial\":%m},"
+            "\"network\":{\"ip\":%m,\"mac\":%m},"
+            "\"tool\":{\"state\":0},"
+            "\"status\":{\"timestamp\":%lu,\"tz_offset\":%d,"
+            "\"sram_used\":%d,\"sram_max\":%d,\"sdram_used\":%d,\"sdram_max\":%d,"
+            "\"tool_state\":%d,\"tool_change\":false}}",
+            MG_ESC(s_device_name), MG_ESC(s_device_firmware),
+            MG_ESC(s_device_hardware), MG_ESC(s_device_serial),
+            MG_ESC(s_device_ip), MG_ESC(s_device_mac),
+            (unsigned long)now, s_tz_offset,
+            s_sram_used, s_sram_max, s_sdram_used, s_sdram_max,
+            s_tool_state);
+    } else {
+        mg_snprintf(json, sizeof(json),
+            "{\"device\":{\"name\":%m,\"firmware\":%m,\"hardware\":%m,\"serial\":%m},"
+            "\"network\":{\"ip\":%m,\"mac\":%m},"
+            "\"tool\":{\"state\":%d,\"name\":%m,\"firmware\":%m,"
+            "\"hardware\":%m,\"model\":%m,\"serial\":%m},"
+            "\"status\":{\"timestamp\":%lu,\"tz_offset\":%d,"
+            "\"sram_used\":%d,\"sram_max\":%d,\"sdram_used\":%d,\"sdram_max\":%d,"
+            "\"tool_state\":%d,\"tool_change\":false}}",
+            MG_ESC(s_device_name), MG_ESC(s_device_firmware),
+            MG_ESC(s_device_hardware), MG_ESC(s_device_serial),
+            MG_ESC(s_device_ip), MG_ESC(s_device_mac),
+            s_tool_state, MG_ESC(s_tool_name), MG_ESC(s_tool_firmware),
+            MG_ESC(s_tool_hardware), MG_ESC(s_tool_model), MG_ESC(s_tool_serial),
+            (unsigned long)now, s_tz_offset,
+            s_sram_used, s_sram_max, s_sdram_used, s_sdram_max,
+            s_tool_state);
+    }
     api_reply_ok(c, json);
-#else
-    // Real device: user implements data retrieval
-    // TODO: Call actual hardware functions
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 static void handle_tool(struct mg_connection *c,
@@ -205,8 +230,6 @@ static void handle_tool(struct mg_connection *c,
     (void) hm;
     (void) u;
 
-#if !defined(WEBSERVER_USER)
-    // Simulator: return mock data
     char json[512];
 
     // Clear tool_change flag after API call
@@ -224,10 +247,6 @@ static void handle_tool(struct mg_connection *c,
             MG_ESC(s_tool_hardware), MG_ESC(s_tool_model), MG_ESC(s_tool_serial));
     }
     api_reply_ok(c, json);
-#else
-    // Real device: user implements data retrieval
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -239,7 +258,6 @@ static void handle_settings_get(struct mg_connection *c,
     (void) hm;
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     char json[1024];
     mg_snprintf(json, sizeof(json),
         "{\"system\":{"
@@ -255,9 +273,6 @@ static void handle_settings_get(struct mg_connection *c,
         MG_ESC(s_device_hardware_buf), MG_ESC(s_device_serial_buf),
         MG_ESC(s_device_ip_buf), s_mbtcp_port, s_custom_port);
     api_reply_ok(c, json);
-#else
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 static void handle_settings_system(struct mg_connection *c,
@@ -265,7 +280,6 @@ static void handle_settings_system(struct mg_connection *c,
                                    struct user *u) {
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     // Parse JSON body and update settings
     s_language = (int) mg_json_get_long(hm->body, "$.language", s_language);
     s_unit = (int) mg_json_get_long(hm->body, "$.unit", s_unit);
@@ -277,10 +291,6 @@ static void handle_settings_system(struct mg_connection *c,
     MG_INFO(("Settings/system updated: lang=%d unit=%d start=%d activ=%d barcode=%d tz=%d",
              s_language, s_unit, s_start_mode, s_activation_mode, s_barcode_mode, s_tz_offset));
     api_reply_ok(c, NULL);
-#else
-    (void) hm;
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 static void handle_settings_ver(struct mg_connection *c,
@@ -288,7 +298,6 @@ static void handle_settings_ver(struct mg_connection *c,
                                 struct user *u) {
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     char *name = mg_json_get_str(hm->body, "$.name");
     char *hardware = mg_json_get_str(hm->body, "$.hardware");
     char *serial = mg_json_get_str(hm->body, "$.serial");
@@ -309,10 +318,6 @@ static void handle_settings_ver(struct mg_connection *c,
     MG_INFO(("Settings/ver updated: name=%s hw=%s sn=%s",
              s_device_name_buf, s_device_hardware_buf, s_device_serial_buf));
     api_reply_ok(c, NULL);
-#else
-    (void) hm;
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 static void handle_settings_network(struct mg_connection *c,
@@ -320,7 +325,6 @@ static void handle_settings_network(struct mg_connection *c,
                                     struct user *u) {
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     char *ip = mg_json_get_str(hm->body, "$.ip");
 
     if (ip) {
@@ -333,10 +337,6 @@ static void handle_settings_network(struct mg_connection *c,
     MG_INFO(("Settings/network updated: ip=%s mbtcp=%d custom=%d",
              s_device_ip_buf, s_mbtcp_port, s_custom_port));
     api_reply_ok(c, NULL);
-#else
-    (void) hm;
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 static void handle_settings_sync_time(struct mg_connection *c,
@@ -344,31 +344,23 @@ static void handle_settings_sync_time(struct mg_connection *c,
                                       struct user *u) {
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     long ts = mg_json_get_long(hm->body, "$.timestamp", 0);
     MG_INFO(("Sync time received: %ld (simulator - ignored)", ts));
     api_reply_ok(c, NULL);
-#else
-    (void) hm;
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 // -----------------------------------------------------------------------------
 // Firmware API Handlers
 // -----------------------------------------------------------------------------
-#if !defined(WEBSERVER_USER)
 static char s_fw_name[64] = "";
 static size_t s_fw_size = 0;
 static size_t s_fw_written = 0;
-#endif
 
 static void handle_firmware_begin(struct mg_connection *c,
                                   struct mg_http_message *hm,
                                   struct user *u) {
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     char *target = mg_json_get_str(hm->body, "$.target");
     char *name = mg_json_get_str(hm->body, "$.name");
     long size = mg_json_get_long(hm->body, "$.size", 0);
@@ -393,12 +385,8 @@ static void handle_firmware_begin(struct mg_connection *c,
 
     MG_INFO(("Firmware begin: name=%s size=%lu", s_fw_name, (unsigned long) s_fw_size));
 
-    // Simulate flash erase (in real device, call actual erase function)
+    // Simulate flash erase
     api_reply_ok(c, NULL);
-#else
-    (void) hm;
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 static void handle_firmware_upload(struct mg_connection *c,
@@ -406,7 +394,6 @@ static void handle_firmware_upload(struct mg_connection *c,
                                    struct user *u) {
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     char offset_str[20];
     long offset = -1;
 
@@ -431,10 +418,6 @@ static void handle_firmware_upload(struct mg_connection *c,
     mg_snprintf(json, sizeof(json), "{\"offset\":%ld,\"written\":%lu}",
                 offset, (unsigned long) len);
     api_reply_ok(c, json);
-#else
-    (void) hm;
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -457,7 +440,6 @@ static void handle_debug_get(struct mg_connection *c,
 
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     // Build JSON response with all debug info
     char json[2048];
     mg_snprintf(json, sizeof(json),
@@ -509,9 +491,6 @@ static void handle_debug_get(struct mg_connection *c,
         s_op_log.screen ? "true" : "false");
 
     api_reply_ok(c, json);
-#else
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 static void handle_debug_set(struct mg_connection *c,
@@ -519,7 +498,6 @@ static void handle_debug_set(struct mg_connection *c,
                              struct user *u) {
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     // Parse and update UDP target IP
     char *ip = mg_json_get_str(hm->body, "$.udp_target_ip");
     if (ip) {
@@ -583,10 +561,6 @@ static void handle_debug_set(struct mg_connection *c,
 
     MG_INFO(("Debug settings updated"));
     api_reply_ok(c, NULL);
-#else
-    (void) hm;
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 // Handle POST /api/debug/save - Persist debug settings to storage
@@ -596,47 +570,79 @@ static void handle_debug_save(struct mg_connection *c,
     (void) hm;
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     // Simulator: just log and return success
     MG_INFO(("Debug settings saved to storage (simulated)"));
     api_reply_ok(c, NULL);
-#else
-    // Real device: save debug settings to flash/EEPROM
-    // TODO: User implementation
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 // -----------------------------------------------------------------------------
 // Log API Handlers
 // -----------------------------------------------------------------------------
+
+// Simulate logs directory path (relative to project root for VSCode debugging)
+#define SIM_LOGS_DIR "webserver/simulate/Logs"
+
+// Context structure for directory listing callback
+struct log_list_ctx {
+    char *p;
+    size_t remain;
+    int count;
+};
+
+// Callback for mg_fs_posix.ls()
+static void log_list_cb(const char *name, void *data) {
+    struct log_list_ctx *ctx = (struct log_list_ctx *)data;
+
+    // Skip . and ..
+    if (name[0] == '.') return;
+
+    // Get file size using Mongoose fs API
+    char path[256];
+    mg_snprintf(path, sizeof(path), "%s/%s", SIM_LOGS_DIR, name);
+    size_t fsize = 0;
+    time_t mtime = 0;
+    int flags = mg_fs_posix.st(path, &fsize, &mtime);
+
+    // Skip if not a file
+    if (!(flags & MG_FS_READ)) return;
+
+    int n = mg_snprintf(ctx->p, ctx->remain, "%s{\"name\":%m,\"size\":%lu,\"type\":\"file\"}",
+                        ctx->count > 0 ? "," : "",
+                        MG_ESC(name),
+                        (unsigned long)fsize);
+    ctx->p += n;
+    ctx->remain -= (size_t)n;
+    ctx->count++;
+}
+
 static void handle_log_list(struct mg_connection *c,
                             struct mg_http_message *hm,
                             struct user *u) {
     (void) hm;
     (void) u;
 
-#if !defined(WEBSERVER_USER)
-    char json[1024];
-    char *p = json;
-    size_t remain = sizeof(json);
+    char json[2048];
+    struct log_list_ctx ctx = {json, sizeof(json), 0};
     int n;
 
-    n = mg_snprintf(p, remain, "{\"logs\":[");
-    p += n; remain -= (size_t)n;
+    n = mg_snprintf(ctx.p, ctx.remain, "{\"logs\":[");
+    ctx.p += n; ctx.remain -= (size_t)n;
 
-    for (int i = 0; s_logs[i].name != NULL; i++) {
-        n = mg_snprintf(p, remain, "%s{\"name\":%m,\"size\":%d,\"type\":%m}",
-                        i > 0 ? "," : "",
-                        MG_ESC(s_logs[i].name), s_logs[i].size, MG_ESC(s_logs[i].type));
-        p += n; remain -= (size_t)n;
+    // 1. List file logs from simulate/Logs directory using Mongoose fs API
+    mg_fs_posix.ls(SIM_LOGS_DIR, log_list_cb, &ctx);
+
+    // 2. Add memory logs
+    for (int i = 0; s_memory_logs[i].name != NULL; i++) {
+        n = mg_snprintf(ctx.p, ctx.remain, "%s{\"name\":%m,\"size\":%d,\"type\":%m}",
+                        ctx.count > 0 ? "," : "",
+                        MG_ESC(s_memory_logs[i].name), s_memory_logs[i].size,
+                        MG_ESC(s_memory_logs[i].type));
+        ctx.p += n; ctx.remain -= (size_t)n;
+        ctx.count++;
     }
 
-    mg_snprintf(p, remain, "]}");
+    mg_snprintf(ctx.p, ctx.remain, "]}");
     api_reply_ok(c, json);
-#else
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
 }
 
 static void handle_log_download(struct mg_connection *c,
@@ -644,7 +650,6 @@ static void handle_log_download(struct mg_connection *c,
                                 struct user *u) {
     (void) u;
 
-#if !defined(WEBSERVER_USER)
     char name[64], offset_str[20], size_str[20];
     int offset = 0, size = 1024;
 
@@ -656,58 +661,66 @@ static void handle_log_download(struct mg_connection *c,
     if (size_str[0]) size = (int) strtol(size_str, NULL, 10);
     if (size > 1024) size = 1024;  // Max chunk size
 
-    // Find the log entry
+    // Check if it's a memory log
     const char *content = NULL;
-    const char *type = NULL;
-    for (int i = 0; s_logs[i].name != NULL; i++) {
-        if (strcmp(s_logs[i].name, name) == 0) {
-            type = s_logs[i].type;
+    for (int i = 0; s_memory_logs[i].name != NULL; i++) {
+        if (strcmp(s_memory_logs[i].name, name) == 0) {
+            // Memory log found
+            if (strcmp(name, "boot.log") == 0) {
+                content = s_boot_log_content;
+            } else if (strcmp(name, "recent.log") == 0) {
+                content = s_recent_log_content;
+            }
             break;
         }
     }
 
-    if (type == NULL) {
+    if (content != NULL) {
+        // Memory log: return content chunk
+        int content_len = (int) strlen(content);
+        if (offset >= content_len) {
+            offset = content_len;
+            size = 0;
+        } else if (offset + size > content_len) {
+            size = content_len - offset;
+        }
+
+        char json[2048];
+        mg_snprintf(json, sizeof(json),
+            "{\"offset\":%d,\"size\":%d,\"content\":%m}",
+            offset, size, mg_print_esc, size, content + offset);
+        api_reply_ok(c, json);
+        return;
+    }
+
+    // File log: serve from simulate/Logs directory
+    // Security check: prevent path traversal
+    if (strchr(name, '/') != NULL || strchr(name, '\\') != NULL ||
+        strcmp(name, "..") == 0) {
+        api_reply_fail(c, ERR_INVALID_PARAM, "Invalid log name");
+        return;
+    }
+
+    char path[256];
+    mg_snprintf(path, sizeof(path), "%s/%s", SIM_LOGS_DIR, name);
+
+    // Check if file exists using Mongoose fs API
+    size_t fsize = 0;
+    time_t mtime = 0;
+    int flags = mg_fs_posix.st(path, &fsize, &mtime);
+    if (!(flags & MG_FS_READ)) {
         api_reply_fail(c, ERR_INVALID_PARAM, "Log not found");
         return;
     }
 
-    // For file type, serve as file download (simulator: not implemented)
-    if (strcmp(type, "file") == 0) {
-        // In real device, use mg_http_serve_file
-        // Simulator: return error
-        api_reply_fail(c, ERR_INVALID_PARAM, "File log not available in simulator");
-        return;
-    }
+    // Build Content-Disposition header with filename
+    char headers[256];
+    mg_snprintf(headers, sizeof(headers),
+                "Content-Disposition: attachment; filename=\"%s\"\r\n", name);
 
-    // For memory type, return content chunk
-    if (strcmp(name, "boot.log") == 0) {
-        content = s_boot_log_content;
-    } else if (strcmp(name, "recent.log") == 0) {
-        content = s_recent_log_content;
-    } else {
-        api_reply_fail(c, ERR_INVALID_PARAM, "Unknown memory log");
-        return;
-    }
-
-    // Calculate chunk
-    int content_len = (int) strlen(content);
-    if (offset >= content_len) {
-        offset = content_len;
-        size = 0;
-    } else if (offset + size > content_len) {
-        size = content_len - offset;
-    }
-
-    // Build response with escaped content
-    char json[2048];
-    mg_snprintf(json, sizeof(json),
-        "{\"offset\":%d,\"size\":%d,\"content\":%m}",
-        offset, size, mg_print_esc, size, content + offset);
-    api_reply_ok(c, json);
-#else
-    (void) hm;
-    api_reply_fail(c, ERR_INVALID_PARAM, "Not implemented");
-#endif
+    struct mg_http_serve_opts opts = {0};
+    opts.extra_headers = headers;
+    mg_http_serve_file(c, hm, path, &opts);
 }
 
 // -----------------------------------------------------------------------------
@@ -720,14 +733,7 @@ static void handle_reboot(struct mg_connection *c,
     (void) u;
 
     api_reply_ok(c, NULL);
-
-#if defined(WEBSERVER_USER)
-    // Real device: trigger reboot
-    // TODO: Call system reboot function
-#else
-    // Simulator: just log
     MG_INFO(("Reboot requested (simulator mode - no action)"));
-#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -765,9 +771,8 @@ struct api_handler s_api_handlers[] = {
 };
 
 // -----------------------------------------------------------------------------
-// WebSocket Status Push Timer (Simulator only)
+// WebSocket Status Push Timer
 // -----------------------------------------------------------------------------
-#if !defined(WEBSERVER_USER)
 static void timer_status_push(void *arg) {
     struct mg_mgr *mgr = (struct mg_mgr *) arg;
 
@@ -789,7 +794,6 @@ static void timer_status_push(void *arg) {
 
     ws_broadcast(mgr, json);
 }
-#endif
 
 // -----------------------------------------------------------------------------
 // Main Event Handler
@@ -808,12 +812,9 @@ void web_init(struct mg_mgr *mgr) {
     mg_http_listen(mgr, HTTP_URL, ev_handler, NULL);
     MG_INFO(("HTTP listener started on %s", HTTP_URL));
 
-    // HTTPS listener would need TLS setup
-    // mg_http_listen(mgr, HTTPS_URL, ev_handler, (void *) 1);
-
-#if !defined(WEBSERVER_USER)
-    // Simulator mode: add status push timer (every 3 seconds)
+    // Add status push timer (every 3 seconds)
     mg_timer_add(mgr, 3000, MG_TIMER_REPEAT, timer_status_push, mgr);
     MG_INFO(("Simulator mode: status push timer started"));
-#endif
 }
+
+#endif  // !WEBSERVER_USER

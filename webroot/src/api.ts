@@ -25,8 +25,9 @@ async function request<T>(
   });
 
   if (res.status === 401) {
-    // Redirect to login
-    window.location.href = '/login';
+    // Clear user from localStorage, let AuthProvider handle redirect
+    localStorage.removeItem('user');
+    window.location.reload();
     throw new Error('Unauthorized');
   }
 

@@ -1,9 +1,13 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.10)
 
 project(example)
 
-# 添加编译定义
-# add_definitions(-DMG_ENABLE_PACKED_FS=1)
+# 添加编译定义（仅生产模式需要）
+if(DEFINED ENV{BUILD_PACKED_FS})
+    add_definitions(-DMG_ENABLE_PACKED_FS=1)
+    add_definitions(-DBUILD_PACKED_FS=1)
+    set(MG_ENABLE_PACKED_FS 1)
+endif()
 
 set(EXEC_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin)
 

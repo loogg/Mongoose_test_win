@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [preact(), tailwindcss()],
   server: {
+    host: true,  // 监听所有网卡，允许外部访问
     proxy: {
       '/api': 'http://localhost:80',
       '/ws': {

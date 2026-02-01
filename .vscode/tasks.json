@@ -1,0 +1,166 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Frontend (Dev)",
+            "type": "shell",
+            "command": "cd webroot && npm run build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Start Vite Dev Server",
+            "type": "shell",
+            "command": "cd webroot && npm run dev",
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^$",
+                    "file": 1,
+                    "location": 2,
+                    "message": 3
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "VITE.*ready",
+                    "endsPattern": "Local:.*http://localhost:5173"
+                }
+            },
+            "presentation": {
+                "reveal": "silent",
+                "panel": "dedicated",
+                "group": "frontend"
+            }
+        },
+        {
+            "label": "Build Frontend (Prod)",
+            "type": "shell",
+            "command": "cd webroot && npm run build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Pack Frontend to C",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}/pack-frontend.ps1"
+            ],
+            "problemMatcher": [],
+            "dependsOn": ["Build Frontend (Prod)"]
+        },
+        {
+            "label": "Clean CMake Cache",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-Command",
+                "Remove-Item build/CMakeCache.txt, build/CMakeFiles -Recurse -Force -ErrorAction SilentlyContinue"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake Configure (Dev)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-S", ".",
+                "-B", "build",
+                "-G", "Ninja",
+                "-DCMAKE_BUILD_TYPE=Debug"
+            ],
+            "options": {
+                "env": {
+                    "PATH": "D:\\msys64\\mingw64\\bin;${env:PATH}"
+                }
+            },
+            "problemMatcher": [],
+            "dependsOn": ["Clean CMake Cache"]
+        },
+        {
+            "label": "CMake Configure (Prod)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-S", ".",
+                "-B", "build",
+                "-G", "Ninja",
+                "-DCMAKE_BUILD_TYPE=Debug"
+            ],
+            "options": {
+                "env": {
+                    "PATH": "D:\\msys64\\mingw64\\bin;${env:PATH}",
+                    "BUILD_PACKED_FS": "1"
+                }
+            },
+            "problemMatcher": [],
+            "dependsOn": ["Clean CMake Cache"]
+        },
+        {
+            "label": "Build Backend (Dev)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
+                "--target", "demo"
+            ],
+            "options": {
+                "env": {
+                    "PATH": "D:\\msys64\\mingw64\\bin;${env:PATH}"
+                }
+            },
+            "problemMatcher": ["$gcc"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "dependsOn": [
+                "Build Frontend (Dev)",
+                "CMake Configure (Dev)"
+            ]
+        },
+        {
+            "label": "Build Backend (Prod)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
+                "--target", "demo"
+            ],
+            "options": {
+                "env": {
+                    "PATH": "D:\\msys64\\mingw64\\bin;${env:PATH}",
+                    "BUILD_PACKED_FS": "1"
+                }
+            },
+            "problemMatcher": ["$gcc"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "dependsOn": [
+                "Pack Frontend to C",
+                "CMake Configure (Prod)"
+            ]
+        },
+        {
+            "label": "Prepare Debug (Dev Mode)",
+            "dependsOn": [
+                "Build Backend (Dev)",
+                "Start Vite Dev Server"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "Prepare Debug (Prod Mode)",
+            "dependsOn": [
+                "Build Backend (Prod)"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}

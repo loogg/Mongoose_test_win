@@ -24,6 +24,17 @@ export interface NetworkInfo {
 export interface DashboardData {
   device: DeviceInfo;
   network: NetworkInfo;
+  tool: ToolInfo;      // Included in dashboard response
+  status: {            // Initial status (same as WebSocket push)
+    timestamp: number;
+    tz_offset: number;
+    sram_used: number;
+    sram_max: number;
+    sdram_used: number;
+    sdram_max: number;
+    tool_state: number;
+    tool_change: boolean;
+  };
 }
 
 export interface ToolInfo {

@@ -21,37 +21,7 @@
 
 ---
 
-### 三、参考实现
-
-实现时参考 `Template/` 目录下的例子：
-
-| 参考文件 | 参考内容 |
-|----------|----------|
-| `device-dashboard/net.c` | 认证流程、Cookie 处理、API 路由、OTA 分块上传 |
-| `device-dashboard/main.c` | web_init 初始化、mg_mgr 使用 |
-| `mongoose_wizard/mongoose/mongoose_glue.c` | Glue 层架构、业务回调模式 |
-
-**注意**：Template 目录只读，不可修改，仅作参考。
-
----
-
-### 四、构建与打包
-
-**开发模式**：
-```bash
-cd webroot && npm run dev  # Vite 开发服务器
-# vite.config.ts 配置 API 代理到后端
-```
-
-**生产构建**：
-```bash
-cd webroot && npm run build
-node pack.js webroot/dist/* certs/* > webserver/net/webserver_packedfs.c
-```
-
----
-
-### 五、模块文档模板
+### 三、模块文档模板
 
 具体功能模块需求文档放置在 `doc/` 文件夹下：
 
@@ -84,7 +54,7 @@ node pack.js webroot/dist/* certs/* > webserver/net/webserver_packedfs.c
 
 ---
 
-### 六、异步处理思路（参考）
+### 四、异步处理思路（参考）
 
 > **注意**：此章节仅作为后续真实设备对接时的参考思路，当前实现时无需处理。
 

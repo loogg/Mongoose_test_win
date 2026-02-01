@@ -31,8 +31,11 @@ const translations = {
     'login.subtitle': '示教器控制台',
     'login.username': '用户名',
     'login.password': '密码',
+    'login.usernamePlaceholder': '请输入用户名',
+    'login.passwordPlaceholder': '请输入密码',
     'login.submit': '登录',
     'login.error': '用户名或密码错误',
+    'login.required': '请输入用户名和密码',
 
     // Dashboard
     'dashboard.device': '设备信息',
@@ -171,8 +174,11 @@ const translations = {
     'login.subtitle': 'Teaching Pendant Console',
     'login.username': 'Username',
     'login.password': 'Password',
+    'login.usernamePlaceholder': 'Enter username',
+    'login.passwordPlaceholder': 'Enter password',
     'login.submit': 'Login',
     'login.error': 'Invalid username or password',
+    'login.required': 'Please enter username and password',
 
     // Dashboard
     'dashboard.device': 'Device Info',
