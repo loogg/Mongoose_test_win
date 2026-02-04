@@ -31,9 +31,9 @@ static const struct packed_file {
   time_t mtime;
 } packed_files[] = {
   {"/web_root/console.svg", v0, sizeof(v0) - 1, 1769946050},
-  {"/web_root/index.html", v1, sizeof(v1) - 1, 1769954443},
-  {"/web_root/assets/index-Bc71ozjj.css", v2, sizeof(v2) - 1, 1769954443},
-  {"/web_root/assets/index-C76UwntG.js", v3, sizeof(v3) - 1, 1769954443},
+  {"/web_root/index.html", v1, sizeof(v1) - 1, 1769954920},
+  {"/web_root/assets/index-Bc71ozjj.css", v2, sizeof(v2) - 1, 1769954920},
+  {"/web_root/assets/index-C76UwntG.js", v3, sizeof(v3) - 1, 1769954920},
   {NULL, NULL, 0, 0}
 };
 

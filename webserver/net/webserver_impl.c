@@ -136,7 +136,11 @@ void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
         else {
             struct mg_http_serve_opts opts = {0};
 #if !defined(BUILD_PACKED_FS)
-            opts.root_dir = "webroot/dist";  // Development: use filesystem
+#if !defined(WEBSERVER_USER)
+            opts.root_dir = "/webroot/dist";  // Development: use filesystem
+#else
+            opts.root_dir = "/webroot";  // Development: use filesystem
+#endif
 #else
             opts.root_dir = "/web_root";     // Embedded: use packed files
             opts.fs = &mg_fs_packed;

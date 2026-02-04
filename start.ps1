@@ -75,7 +75,7 @@ if ($Mode -eq "prod") {
     # Collect all files using glob patterns (PowerShell style)
     $distFiles = Get-ChildItem "webroot/dist" -Recurse -File | ForEach-Object {
         $rel = $_.FullName.Replace("$PWD\", "").Replace("\", "/")
-        "$($rel):web_root/$($rel.Replace('webroot/dist/', ''))"
+        "$($rel):web_root/$($rel.Replace('webroot/dist/', '')):gzip"
     }
 
     $certFiles = @()
@@ -112,19 +112,21 @@ if (-not (Test-Path $BuildDir)) {
 
 Push-Location $BuildDir
 
-# Run CMake configure if needed
-if (-not (Test-Path "CMakeCache.txt")) {
-    # Set environment variable for CMake in production mode
-    if ($Mode -eq "prod") {
-        $env:BUILD_PACKED_FS = "1"
-    }
-    cmake ..
+# Clean CMake cache to force reconfiguration
+if (Test-Path "CMakeCache.txt") {
+    Write-Info "Cleaning CMake cache..."
+    Remove-Item "CMakeCache.txt" -Force
+}
+if (Test-Path "CMakeFiles") {
+    Remove-Item "CMakeFiles" -Recurse -Force
 }
 
-# Set environment variable for CMake build in production mode
+# Run CMake configure
+# Set environment variable for CMake in production mode
 if ($Mode -eq "prod") {
     $env:BUILD_PACKED_FS = "1"
 }
+cmake ..
 
 cmake --build . --target demo
 if ($LASTEXITCODE -ne 0) {
@@ -161,7 +163,12 @@ if ($Mode -eq "dev") {
         npm install
     }
 
-    $frontendProcess = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -PassThru -WindowStyle Normal
+    if ($env:OS -like "*Windows*") {
+       # Use cmd.exe to avoid file association issues (e.g. opening npm.ps1)
+       $frontendProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npm run dev" -PassThru -WindowStyle Normal
+    } else {
+       $frontendProcess = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -PassThru -WindowStyle Normal
+    }
     Pop-Location
     Start-Sleep -Seconds 2
     Write-OK "Frontend started (PID: $($frontendProcess.Id))"
