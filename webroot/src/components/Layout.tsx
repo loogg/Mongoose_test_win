@@ -16,6 +16,7 @@ export function Layout({ children }: LayoutProps) {
   const { t, lang, setLang } = useI18n();
   const { user, logout } = useAuth();
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
 
   // 监听路由变化
   useEffect(() => {
@@ -29,7 +30,31 @@ export function Layout({ children }: LayoutProps) {
   // 导航点击处理
   const handleNavClick = (path: string) => {
     setCurrentPath(path);
+    // 在移动设备上点击导航后自动关闭侧边栏
+    if (window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
   };
+
+  // 菜单按钮点击处理
+  const handleMenuClick = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  // 监听窗口大小变化
+  useEffect(() => {
+    const handleResize = () => {
+      // 宽度够的情况下显示导航栏，宽度不够的情况下隐藏导航栏
+      if (window.innerWidth >= 768) {
+        setIsSidebarOpen(true);
+      } else {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // 根据权限级别定义可访问的导航项
   const allNavItems = [
@@ -46,7 +71,7 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div class="h-screen flex bg-gray-50 overflow-hidden">
       {/* Sidebar */}
-      <aside class="w-64 bg-gradient-to-b from-slate-800 to-slate-900 text-white flex flex-col shadow-xl h-screen">
+      <aside class={`w-64 bg-gradient-to-b from-slate-800 to-slate-900 text-white flex flex-col shadow-xl transition-all duration-300 ease-in-out ${isSidebarOpen ? 'block' : 'hidden'}`}>
         {/* Logo Area */}
         <div class="p-6 border-b border-slate-700 flex-shrink-0">
           <div class="flex items-center gap-3">
@@ -79,8 +104,11 @@ export function Layout({ children }: LayoutProps) {
           ))}
         </nav>
 
+        {/* Spacer */}
+        <div class="flex-1"></div>
+
         {/* User Section */}
-        <div class="p-4 border-t border-slate-700 flex-shrink-0">
+        <div class="p-4 border-t border-slate-700">
           {user && (
             <div class="space-y-3">
               <div class="flex items-center gap-3 px-2">
@@ -107,21 +135,33 @@ export function Layout({ children }: LayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <div class="flex-1 flex flex-col h-screen overflow-hidden">
+      <div class={`flex-1 flex flex-col h-screen overflow-hidden transition-all duration-300 ease-in-out`}>
         {/* Top Bar */}
         <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm flex-shrink-0">
-          <div>
-            <h2 class="text-xl font-semibold text-gray-800">
-              {navItems.find(item => item.path === currentPath)?.label || t('nav.dashboard')}
-            </h2>
-            <p class="text-sm text-gray-500">
-              {new Date().toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}
-            </p>
+          <div class="flex items-center gap-4">
+            {/* Menu Button */}
+            <button
+              onClick={handleMenuClick}
+              class="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              aria-label="Toggle menu"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div>
+              <h2 class="text-xl font-semibold text-gray-800">
+                {navItems.find(item => item.path === currentPath)?.label || t('nav.dashboard')}
+              </h2>
+              <p class="text-sm text-gray-500">
+                {new Date().toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </p>
+            </div>
           </div>
           <div class="flex items-center gap-4">
             {/* Language Switcher */}
