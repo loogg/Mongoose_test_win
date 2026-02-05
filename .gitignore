@@ -56,6 +56,8 @@ doc/doxygen/output/*
 !doc/doxygen/output/index.html
 !doc/doxygen/output/figures
 
+webserver/net/webserver_packedfs.c
+
 .cache
 build
 

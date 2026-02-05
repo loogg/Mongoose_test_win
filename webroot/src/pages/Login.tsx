@@ -130,14 +130,14 @@ export function LoginPage() {
               <div class="grid grid-cols-3 gap-2 text-xs">
                 <button
                   type="button"
-                  onClick={() => { setUsername('admin'); setPassword('admin123'); }}
+                  onClick={() => { setUsername('admin'); setPassword('admin'); }}
                   class="py-2 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
                 >
                   Admin
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setUsername('user'); setPassword('user123'); }}
+                  onClick={() => { setUsername('user'); setPassword('user'); }}
                   class="py-2 px-3 bg-gray-50 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
                 >
                   User

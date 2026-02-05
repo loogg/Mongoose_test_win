@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
 import { useI18n } from '../i18n';
 import { useAuth } from '../auth';
+import { useWebSocket } from './WebSocket';
 
 // 权限级别常量
 const PERM_READONLY = 1;  // Guest
@@ -15,6 +16,7 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const { t, lang, setLang } = useI18n();
   const { user, logout } = useAuth();
+  const { status } = useWebSocket();
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
 
@@ -55,6 +57,8 @@ export function Layout({ children }: LayoutProps) {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // 时间数据现在直接从useWebSocket获取，不再需要监听localStorage变化
 
   // 根据权限级别定义可访问的导航项
   const allNavItems = [
@@ -154,12 +158,38 @@ export function Layout({ children }: LayoutProps) {
                 {navItems.find(item => item.path === currentPath)?.label || t('nav.dashboard')}
               </h2>
               <p class="text-sm text-gray-500">
-                {new Date().toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
+                {(() => {
+                  // 直接从WebSocket获取时间数据
+                  const timestamp = status?.timestamp || Math.floor(Date.now() / 1000);
+                  const tz_offset = status?.tz_offset || 8;
+                  
+                  // 计算加上时区偏移后的时间，使用UTC方法显示避免浏览器再次转换时区
+                  const date = new Date((timestamp + tz_offset * 3600) * 1000);
+                  const year = date.getUTCFullYear();
+                  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                  const day = String(date.getUTCDate()).padStart(2, '0');
+                  const hours = String(date.getUTCHours()).padStart(2, '0');
+                  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+                  
+                  // 格式化日期时间
+                  let formattedDate = '';
+                  if (lang === 'zh') {
+                    // 中文格式：2026年2月5日 星期四 17:00:00
+                    const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+                    const weekday = weekdays[date.getUTCDay()];
+                    formattedDate = `${year}年${month}月${day}日 ${weekday} ${hours}:${minutes}:${seconds}`;
+                  } else {
+                    // 英文格式：Thursday, February 5, 2026 17:00:00
+                    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    const weekday = weekdays[date.getUTCDay()];
+                    const monthName = months[date.getUTCMonth()];
+                    formattedDate = `${weekday}, ${monthName} ${day}, ${year} ${hours}:${minutes}:${seconds}`;
+                  }
+                  
+                  return formattedDate + ` (UTC${tz_offset >= 0 ? '+' : ''}${tz_offset})`;
+                })()}
               </p>
             </div>
           </div>

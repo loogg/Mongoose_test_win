@@ -1,6 +1,8 @@
 import Router, { Route } from 'preact-router';
 import { I18nProvider } from './i18n';
 import { AuthProvider, useAuth } from './auth';
+import { ToastProvider } from './components/Toast';
+import { WebSocketProvider } from './components/WebSocket';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/Login';
 import { DashboardPage } from './pages/Dashboard';
@@ -38,7 +40,11 @@ export function App() {
   return (
     <I18nProvider>
       <AuthProvider>
-        <ProtectedRoutes />
+        <ToastProvider>
+          <WebSocketProvider>
+            <ProtectedRoutes />
+          </WebSocketProvider>
+        </ToastProvider>
       </AuthProvider>
     </I18nProvider>
   );

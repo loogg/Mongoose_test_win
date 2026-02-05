@@ -56,7 +56,7 @@ export interface StatusPush {
     sram_max: number;
     sdram_used: number;
     sdram_max: number;
-    time: number;
+    timestamp: number;
     tz_offset: number;
   };
 }

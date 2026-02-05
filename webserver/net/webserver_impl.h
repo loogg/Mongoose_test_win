@@ -12,9 +12,9 @@ extern "C" {
 // User structure for authentication
 // -----------------------------------------------------------------------------
 struct user {
-    const char *name;
-    const char *pass;
-    const char *token;
+    char name[64];
+    char pass[64];
+    char token[128];
     int level;
 };
 

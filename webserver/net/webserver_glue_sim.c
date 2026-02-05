@@ -20,10 +20,10 @@ static struct mg_mgr *s_mgr = NULL;
 // User Table (Fixed tokens for embedded device)
 // -----------------------------------------------------------------------------
 static struct user s_users[] = {
-    {"admin", "admin123", "admin_token_fixed", PERM_ADMIN},
-    {"user",  "user123",  "user_token_fixed",  PERM_USER},
+    {"admin", "admin", "admin_token_fixed", PERM_ADMIN},
+    {"user",  "user",  "user_token_fixed",  PERM_USER},
     {"guest", "guest",    "guest_token_fixed", PERM_READONLY},
-    {NULL, NULL, NULL, 0}
+    {"", "", "", 0}
 };
 
 // -----------------------------------------------------------------------------
@@ -151,14 +151,14 @@ struct user *glue_authenticate(struct mg_http_message *hm) {
 
     if (user[0] != '\0' && pass[0] != '\0') {
         // Basic Auth: search by user/password
-        for (u = s_users; result == NULL && u->name != NULL; u++) {
+        for (u = s_users; result == NULL && u->name[0] != '\0'; u++) {
             if (strcmp(user, u->name) == 0 && strcmp(pass, u->pass) == 0) {
                 result = u;
             }
         }
     } else if (user[0] == '\0' && pass[0] != '\0') {
         // Cookie token: search by token
-        for (u = s_users; result == NULL && u->name != NULL; u++) {
+        for (u = s_users; result == NULL && u->name[0] != '\0'; u++) {
             if (strcmp(pass, u->token) == 0) {
                 result = u;
             }
@@ -304,15 +304,15 @@ static void handle_settings_ver(struct mg_connection *c,
 
     if (name) {
         mg_snprintf(s_device_name_buf, sizeof(s_device_name_buf), "%s", name);
-        free(name);
+        mg_free(name);
     }
     if (hardware) {
         mg_snprintf(s_device_hardware_buf, sizeof(s_device_hardware_buf), "%s", hardware);
-        free(hardware);
+        mg_free(hardware);
     }
     if (serial) {
         mg_snprintf(s_device_serial_buf, sizeof(s_device_serial_buf), "%s", serial);
-        free(serial);
+        mg_free(serial);
     }
 
     MG_INFO(("Settings/ver updated: name=%s hw=%s sn=%s",
@@ -329,7 +329,7 @@ static void handle_settings_network(struct mg_connection *c,
 
     if (ip) {
         mg_snprintf(s_device_ip_buf, sizeof(s_device_ip_buf), "%s", ip);
-        free(ip);
+        mg_free(ip);
     }
     s_mbtcp_port = (int) mg_json_get_long(hm->body, "$.mbtcp_port", s_mbtcp_port);
     s_custom_port = (int) mg_json_get_long(hm->body, "$.custom_port", s_custom_port);
@@ -367,8 +367,8 @@ static void handle_firmware_begin(struct mg_connection *c,
 
     // Validate target
     if (target == NULL || strcmp(target, "controller") != 0) {
-        if (target) free(target);
-        if (name) free(name);
+        if (target) mg_free(target);
+        if (name) mg_free(name);
         api_reply_fail(c, ERR_INVALID_PARAM, "Unsupported target");
         return;
     }
@@ -376,12 +376,12 @@ static void handle_firmware_begin(struct mg_connection *c,
     // Store firmware info
     if (name) {
         mg_snprintf(s_fw_name, sizeof(s_fw_name), "%s", name);
-        free(name);
+        mg_free(name);
     }
     s_fw_size = (size_t) size;
     s_fw_written = 0;
 
-    free(target);
+    mg_free(target);
 
     MG_INFO(("Firmware begin: name=%s size=%lu", s_fw_name, (unsigned long) s_fw_size));
 
@@ -502,61 +502,79 @@ static void handle_debug_set(struct mg_connection *c,
     char *ip = mg_json_get_str(hm->body, "$.udp_target_ip");
     if (ip) {
         mg_snprintf(s_udp_target_ip, sizeof(s_udp_target_ip), "%s", ip);
-        free(ip);
+        mg_free(ip);
     }
 
     // Parse CLI flags
     bool found;
     bool val;
 
-    val = mg_json_get_bool(hm->body, "$.cli.serial_log", &found);
+    found = mg_json_get_bool(hm->body, "$.cli.serial_log", &val);
     if (found) s_cli_serial_log = val;
 
-    val = mg_json_get_bool(hm->body, "$.cli.telnet_auth", &found);
+    found = mg_json_get_bool(hm->body, "$.cli.telnet_auth", &val);
     if (found) s_cli_telnet_auth = val;
 
     // Parse UDP forward flags
-    val = mg_json_get_bool(hm->body, "$.udp_forward.tool_rx", &found);
+    found = mg_json_get_bool(hm->body, "$.udp_forward.tool_rx", &val);
     if (found) s_udp_forward.tool_rx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.tool_tx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.tool_tx", &val);
     if (found) s_udp_forward.tool_tx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.screen_rx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.screen_rx", &val);
     if (found) s_udp_forward.screen_rx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.screen_tx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.screen_tx", &val);
     if (found) s_udp_forward.screen_tx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.op1_rx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.op1_rx", &val);
     if (found) s_udp_forward.op1_rx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.op1_tx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.op1_tx", &val);
     if (found) s_udp_forward.op1_tx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.op2_rx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.op2_rx", &val);
     if (found) s_udp_forward.op2_rx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.op2_tx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.op2_tx", &val);
     if (found) s_udp_forward.op2_tx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp1_rx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp1_rx", &val);
     if (found) s_udp_forward.mbtcp1_rx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp1_tx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp1_tx", &val);
     if (found) s_udp_forward.mbtcp1_tx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp2_rx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp2_rx", &val);
     if (found) s_udp_forward.mbtcp2_rx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp2_tx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp2_tx", &val);
     if (found) s_udp_forward.mbtcp2_tx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp3_rx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp3_rx", &val);
     if (found) s_udp_forward.mbtcp3_rx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp3_tx", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.mbtcp3_tx", &val);
     if (found) s_udp_forward.mbtcp3_tx = val;
-    val = mg_json_get_bool(hm->body, "$.udp_forward.udp_log", &found);
+
+    found = mg_json_get_bool(hm->body, "$.udp_forward.udp_log", &val);
     if (found) s_udp_forward.udp_log = val;
 
     // Parse operation log flags
-    val = mg_json_get_bool(hm->body, "$.op_log.io", &found);
+    found = mg_json_get_bool(hm->body, "$.op_log.io", &val);
     if (found) s_op_log.io = val;
-    val = mg_json_get_bool(hm->body, "$.op_log.mbtcp", &found);
+
+    found = mg_json_get_bool(hm->body, "$.op_log.mbtcp", &val);
     if (found) s_op_log.mbtcp = val;
-    val = mg_json_get_bool(hm->body, "$.op_log.op", &found);
+
+    found = mg_json_get_bool(hm->body, "$.op_log.op", &val);
     if (found) s_op_log.op = val;
-    val = mg_json_get_bool(hm->body, "$.op_log.tool", &found);
+
+    found = mg_json_get_bool(hm->body, "$.op_log.tool", &val);
     if (found) s_op_log.tool = val;
-    val = mg_json_get_bool(hm->body, "$.op_log.screen", &found);
+
+    found = mg_json_get_bool(hm->body, "$.op_log.screen", &val);
     if (found) s_op_log.screen = val;
 
     MG_INFO(("Debug settings updated"));
@@ -786,7 +804,7 @@ static void timer_status_push(void *arg) {
         "\"tool_state\":%d,\"tool_change\":%s,"
         "\"sram_used\":%d,\"sram_max\":%d,"
         "\"sdram_used\":%d,\"sdram_max\":%d,"
-        "\"time\":%lu,\"tz_offset\":%d}}",
+        "\"timestamp\":%lu,\"tz_offset\":%d}}",
         s_tool_state, s_tool_change ? "true" : "false",
         s_sram_used, s_sram_max,
         s_sdram_used, s_sdram_max,
@@ -805,8 +823,16 @@ static void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 // -----------------------------------------------------------------------------
 // Web Server Initialization
 // -----------------------------------------------------------------------------
+static void web_user_init(void) {
+    for (int i = 0; i < sizeof(s_users) / sizeof(s_users[0]); i++) {
+        snprintf(s_users[i].token, sizeof(s_users[i].token), "%s%u", s_users[i].name, time(NULL));
+    }
+}
+
 void web_init(struct mg_mgr *mgr) {
     s_mgr = mgr;
+
+    web_user_init();
 
     // Start HTTP listener
     mg_http_listen(mgr, HTTP_URL, ev_handler, NULL);

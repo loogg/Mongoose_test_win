@@ -15,6 +15,8 @@
 | 协议 | HTTP:80 / HTTPS:443 / WebSocket |
 | 认证 | Basic Auth + Cookie（固定 Token） |
 
+内存管理：只允许使用 Mongoose 的内存管理函数。
+
 ---
 
 ## 二、目录结构
@@ -329,9 +331,9 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
 ```c
 static struct user s_users[] = {
-    {"admin", "admin123", "admin_token", PERM_ADMIN},
-    {"user",  "user123",  "user_token",  PERM_USER},
-    {"guest", "guest",    "guest_token", PERM_READONLY},
+    {"admin", "admin", "admin_token", PERM_ADMIN},
+    {"user",  "user",  "user_token",  PERM_USER},
+    {"guest", "guest", "guest_token", PERM_READONLY},
     {NULL, NULL, NULL, 0}
 };
 ```

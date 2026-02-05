@@ -53,6 +53,11 @@ const translations = {
     'dashboard.memory': '内存使用',
     'dashboard.memory.sram': 'SRAM',
     'dashboard.memory.sdram': 'SDRAM',
+    'dashboard.memory.used': '已使用',
+    'dashboard.memory.max_used': '最大使用',
+    'dashboard.memory.usage': '使用率',
+    'dashboard.memory.usage_curve': '使用曲线',
+    'dashboard.memory.no_data': '暂无数据',
     'dashboard.time': '系统时间',
     'dashboard.syncTime': '同步时间',
 
@@ -137,6 +142,18 @@ const translations = {
     'settings.language.zh': '中文',
     'settings.language.en': 'English',
 
+    // Settings errors
+    'settings.error.timezone.min': '时区不能小于 -12',
+    'settings.error.timezone.max': '时区不能大于 +12',
+    'settings.error.timezone.invalid': '时区必须是整数',
+    'settings.error.timezone.required': '时区不能为空',
+    'settings.error.port.range': '端口必须在 500-65535 之间',
+    'settings.error.port.invalid': '端口必须是整数',
+    'settings.error.port.required': '端口不能为空',
+    'settings.error.port.duplicate': '端口不能重复',
+    'settings.error.ip.format': 'IP 地址格式错误',
+    'settings.error.ip.required': 'IP 地址不能为空',
+
     // Error codes
     'error.1001': '参数校验失败',
     'error.1002': '资源冲突',
@@ -196,6 +213,11 @@ const translations = {
     'dashboard.memory': 'Memory Usage',
     'dashboard.memory.sram': 'SRAM',
     'dashboard.memory.sdram': 'SDRAM',
+    'dashboard.memory.used': 'Used',
+    'dashboard.memory.max_used': 'Max Used',
+    'dashboard.memory.usage': 'Usage',
+    'dashboard.memory.usage_curve': 'Usage Curve',
+    'dashboard.memory.no_data': 'No Data',
     'dashboard.time': 'System Time',
     'dashboard.syncTime': 'Sync Time',
 
@@ -279,6 +301,18 @@ const translations = {
     'settings.activationMode.screen': 'Screen',
     'settings.language.zh': '中文',
     'settings.language.en': 'English',
+
+    // Settings errors
+    'settings.error.timezone.min': 'Timezone cannot be less than -12',
+    'settings.error.timezone.max': 'Timezone cannot be greater than +12',
+    'settings.error.timezone.invalid': 'Timezone must be an integer',
+    'settings.error.timezone.required': 'Timezone cannot be empty',
+    'settings.error.port.range': 'Port must be between 500-65535',
+    'settings.error.port.invalid': 'Port must be an integer',
+    'settings.error.port.required': 'Port cannot be empty',
+    'settings.error.port.duplicate': 'Ports cannot be the same',
+    'settings.error.ip.format': 'Invalid IP address format',
+    'settings.error.ip.required': 'IP address cannot be empty',
 
     // Error codes
     'error.1001': 'Invalid parameter',

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { useI18n } from '../i18n';
 import { useAuth } from '../auth';
+import { useToast } from '../components/Toast';
 import {
   getSettings,
   updateSystemSettings,
@@ -17,6 +18,7 @@ const PERM_ADMIN = 7;     // Admin - 可修改所有设置
 export function SettingsPage() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,6 +37,7 @@ export function SettingsPage() {
     barcode_mode: 0,
     timezone: 8,
   });
+  const [errors, setErrors] = useState<{ timezone?: string; mbtcp_port?: string; custom_port?: string; ip?: string }>({});
 
   const [versionForm, setVersionForm] = useState({
     name: '',
@@ -51,6 +54,74 @@ export function SettingsPage() {
   useEffect(() => {
     loadSettings();
   }, []);
+
+  // 监听编辑模式变化，进入编辑时检查范围并显示错误提示（不修改值）
+  useEffect(() => {
+    if (editSystem) {
+      let value = systemForm.timezone;
+      let error = '';
+
+      // 检查输入是否为有效整数
+      if (isNaN(value) || !Number.isInteger(value)) {
+        error = t('settings.error.timezone.invalid');
+      }
+      // 检查范围
+      else if (value < -12) {
+        error = t('settings.error.timezone.min');
+      } else if (value > 12) {
+        error = t('settings.error.timezone.max');
+      } else {
+        error = '';
+      }
+
+      setErrors({ ...errors, timezone: error });
+    }
+  }, [t, editSystem, systemForm.timezone]);
+
+  // 监听网络编辑模式变化，进入编辑时检查端口范围并显示错误提示（不修改值）
+  useEffect(() => {
+    if (editNetwork) {
+      let ipError = '';
+      let mbtcpPortError = '';
+      let customPortError = '';
+
+      // 检查IP地址格式
+      const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+      if (networkForm.ip === '') {
+        ipError = t('settings.error.ip.required');
+      } else if (!ipRegex.test(networkForm.ip)) {
+        ipError = t('settings.error.ip.format');
+      } else {
+        ipError = '';
+      }
+
+      // 检查Modbus TCP端口
+      if (isNaN(networkForm.mbtcp_port) || !Number.isInteger(networkForm.mbtcp_port)) {
+        mbtcpPortError = t('settings.error.port.invalid');
+      } else if (networkForm.mbtcp_port < 500 || networkForm.mbtcp_port > 65535) {
+        mbtcpPortError = t('settings.error.port.range');
+      } else {
+        mbtcpPortError = '';
+      }
+
+      // 检查自定义端口
+      if (isNaN(networkForm.custom_port) || !Number.isInteger(networkForm.custom_port)) {
+        customPortError = t('settings.error.port.invalid');
+      } else if (networkForm.custom_port < 500 || networkForm.custom_port > 65535) {
+        customPortError = t('settings.error.port.range');
+      } else {
+        customPortError = '';
+      }
+
+      // 检查端口不重复
+      if (!mbtcpPortError && !customPortError && networkForm.mbtcp_port === networkForm.custom_port) {
+        mbtcpPortError = t('settings.error.port.duplicate');
+        customPortError = t('settings.error.port.duplicate');
+      }
+
+      setErrors({ ...errors, ip: ipError, mbtcp_port: mbtcpPortError, custom_port: customPortError });
+    }
+  }, [t, editNetwork, networkForm.ip, networkForm.mbtcp_port, networkForm.custom_port]);
 
   const loadSettings = async () => {
     setLoading(true);
@@ -69,27 +140,123 @@ export function SettingsPage() {
   };
 
   const handleSaveSystem = async () => {
+    // 检查时区值是否有效
+    let value = systemForm.timezone;
+    let error = '';
+
+    // 检查输入是否为有效整数
+    if (isNaN(value) || !Number.isInteger(value)) {
+      error = t('settings.error.timezone.invalid');
+    }
+    // 检查范围
+    else if (value < -12) {
+      error = t('settings.error.timezone.min');
+    } else if (value > 12) {
+      error = t('settings.error.timezone.max');
+    } else {
+      error = '';
+    }
+
+    if (error) {
+      setErrors({ ...errors, timezone: error });
+      showToast(error, 'error');
+      return;
+    }
+
     setSaving(true);
-    await updateSystemSettings(systemForm);
-    setEditSystem(false);
-    await loadSettings();
-    setSaving(false);
+    try {
+      const res = await updateSystemSettings(systemForm);
+      if (res.ack) {
+        setEditSystem(false);
+        await loadSettings();
+        showToast(t('common.success'), 'success');
+      } else {
+        showToast(res.error?.message || t('common.error'), 'error');
+      }
+    } catch (err) {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveVersion = async () => {
     setSaving(true);
-    await updateVersionSettings(versionForm);
-    setEditVersion(false);
-    await loadSettings();
-    setSaving(false);
+    try {
+      const res = await updateVersionSettings(versionForm);
+      if (res.ack) {
+        setEditVersion(false);
+        await loadSettings();
+        showToast(t('common.success'), 'success');
+      } else {
+        showToast(res.error?.message || t('common.error'), 'error');
+      }
+    } catch (err) {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveNetwork = async () => {
+    // 验证IP地址格式
+    let ipError = '';
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (!ipRegex.test(networkForm.ip)) {
+      ipError = t('settings.error.ip.format');
+    }
+    
+    // 验证端口
+    let mbtcpPortError = '';
+    let customPortError = '';
+    
+    // 验证Modbus TCP端口
+    if (isNaN(networkForm.mbtcp_port) || !Number.isInteger(networkForm.mbtcp_port)) {
+      mbtcpPortError = t('settings.error.port.invalid');
+    } else if (networkForm.mbtcp_port < 500 || networkForm.mbtcp_port > 65535) {
+      mbtcpPortError = t('settings.error.port.range');
+    } else {
+      mbtcpPortError = '';
+    }
+    
+    // 验证自定义端口
+    if (isNaN(networkForm.custom_port) || !Number.isInteger(networkForm.custom_port)) {
+      customPortError = t('settings.error.port.invalid');
+    } else if (networkForm.custom_port < 500 || networkForm.custom_port > 65535) {
+      customPortError = t('settings.error.port.range');
+    } else {
+      customPortError = '';
+    }
+    
+    // 验证端口不重复
+    if (!mbtcpPortError && !customPortError && networkForm.mbtcp_port === networkForm.custom_port) {
+      mbtcpPortError = t('settings.error.port.duplicate');
+      customPortError = t('settings.error.port.duplicate');
+    }
+    
+    if (ipError || mbtcpPortError || customPortError) {
+      setErrors({ ...errors, ip: ipError, mbtcp_port: mbtcpPortError, custom_port: customPortError });
+      if (ipError) showToast(ipError, 'error');
+      if (mbtcpPortError) showToast(mbtcpPortError, 'error');
+      if (customPortError && mbtcpPortError !== customPortError) showToast(customPortError, 'error');
+      return;
+    }
+    
     setSaving(true);
-    await updateNetworkSettings(networkForm);
-    setEditNetwork(false);
-    await loadSettings();
-    setSaving(false);
+    try {
+      const res = await updateNetworkSettings(networkForm);
+      if (res.ack) {
+        setEditNetwork(false);
+        await loadSettings();
+        showToast(t('common.success'), 'success');
+      } else {
+        showToast(res.error?.message || t('common.error'), 'error');
+      }
+    } catch (err) {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const languageOptions = [
@@ -99,8 +266,10 @@ export function SettingsPage() {
 
   const unitOptions = [
     { value: 0, label: 'Nm' },
-    { value: 1, label: 'kgf.cm' },
-    { value: 2, label: 'lbf.in' },
+    { value: 1, label: 'kgf·cm' },
+    { value: 2, label: 'ft·lbf' },
+    { value: 3, label: 'in·lbf' },
+    { value: 4, label: 'kgf·m' },
   ];
 
   const startModeOptions = [
@@ -200,19 +369,83 @@ export function SettingsPage() {
               </select>
             </div>
             <div>
+              <label class={labelClass}>{t('settings.system.startMode')}</label>
+              <select
+                value={systemForm.start_mode}
+                onChange={(e) => setSystemForm({ ...systemForm, start_mode: Number((e.target as HTMLSelectElement).value) })}
+                class={selectClass}
+              >
+                {startModeOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{getOptionLabel(o)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class={labelClass}>{t('settings.system.activationMode')}</label>
+              <select
+                value={systemForm.activation_mode}
+                onChange={(e) => setSystemForm({ ...systemForm, activation_mode: Number((e.target as HTMLSelectElement).value) })}
+                class={selectClass}
+              >
+                {activationModeOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{getOptionLabel(o)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label class={labelClass}>{t('settings.system.timezone')}</label>
               <input
                 type="number"
-                value={systemForm.timezone}
-                onChange={(e) => setSystemForm({ ...systemForm, timezone: Number((e.target as HTMLInputElement).value) })}
-                class={inputClass}
-                min="-12"
-                max="14"
+                value={isNaN(systemForm.timezone) ? '' : systemForm.timezone}
+                onChange={(e) => {
+                  let value = (e.target as HTMLInputElement).value;
+                  let numValue = parseInt(value, 10);
+                  let error = '';
+
+                  // 检查输入是否为空
+                  if (value === '') {
+                    // 设置错误，同时更新表单值为NaN，这样输入框会显示为空
+                    setSystemForm({ ...systemForm, timezone: NaN });
+                    error = t('settings.error.timezone.required');
+                    setErrors({ ...errors, timezone: error });
+                    return;
+                  }
+
+                  // 检查输入是否为有效整数
+                  if (isNaN(numValue)) {
+                    // 保持当前值，设置错误
+                    error = t('settings.error.timezone.invalid');
+                    setErrors({ ...errors, timezone: error });
+                    return;
+                  }
+
+                  // 检查范围
+                  if (numValue < -12) {
+                    error = t('settings.error.timezone.min');
+                  } else if (numValue > 12) {
+                    error = t('settings.error.timezone.max');
+                  } else {
+                    error = '';
+                  }
+
+                  setSystemForm({ ...systemForm, timezone: numValue });
+                  setErrors({ ...errors, timezone: error });
+                }}
+                class={`${inputClass} ${errors.timezone ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
               />
+              {errors.timezone && (
+                <p class="mt-1 text-xs text-red-500">{errors.timezone}</p>
+              )}
             </div>
             <div class="flex gap-3 pt-4 border-t border-gray-100">
               <Button onClick={handleSaveSystem} loading={saving} icon="💾">{t('common.save')}</Button>
-              <Button variant="secondary" onClick={() => setEditSystem(false)} icon="❌">{t('common.cancel')}</Button>
+              <Button variant="secondary" onClick={() => {
+                setEditSystem(false);
+                if (settings?.system) {
+                  setSystemForm(settings.system);
+                }
+                setErrors({});
+              }} icon="❌">{t('common.cancel')}</Button>
             </div>
           </div>
         )}
@@ -263,7 +496,16 @@ export function SettingsPage() {
             </div>
             <div class="flex gap-3 pt-4 border-t border-gray-100">
               <Button onClick={handleSaveVersion} loading={saving} icon="💾">{t('common.save')}</Button>
-              <Button variant="secondary" onClick={() => setEditVersion(false)} icon="❌">{t('common.cancel')}</Button>
+              <Button variant="secondary" onClick={() => {
+                setEditVersion(false);
+                if (settings?.ver) {
+                  setVersionForm({
+                    name: settings.ver.name,
+                    hardware: settings.ver.hardware,
+                    serial: settings.ver.serial,
+                  });
+                }
+              }} icon="❌">{t('common.cancel')}</Button>
             </div>
           </div>
         )}
@@ -298,31 +540,123 @@ export function SettingsPage() {
               <input
                 type="text"
                 value={networkForm.ip}
-                onChange={(e) => setNetworkForm({ ...networkForm, ip: (e.target as HTMLInputElement).value })}
-                class={inputClass}
+                onChange={(e) => {
+                  let value = (e.target as HTMLInputElement).value;
+                  let error = '';
+                  
+                  // 检查IP地址格式
+                  const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.|$)){1,4}$/;
+                  if (value === '') {
+                    error = t('settings.error.ip.required');
+                  } else if (!ipRegex.test(value)) {
+                    error = t('settings.error.ip.format');
+                  } else {
+                    error = '';
+                  }
+                  
+                  setNetworkForm({ ...networkForm, ip: value });
+                  setErrors({ ...errors, ip: error });
+                }}
+                class={`${inputClass} ${errors.ip ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
               />
+              {errors.ip && (
+                <p class="mt-1 text-xs text-red-500">{errors.ip}</p>
+              )}
             </div>
             <div>
               <label class={labelClass}>{t('settings.network.mbtcpPort')}</label>
               <input
                 type="number"
-                value={networkForm.mbtcp_port}
-                onChange={(e) => setNetworkForm({ ...networkForm, mbtcp_port: Number((e.target as HTMLInputElement).value) })}
-                class={inputClass}
+                value={isNaN(networkForm.mbtcp_port) ? '' : networkForm.mbtcp_port}
+                onChange={(e) => {
+                  let value = (e.target as HTMLInputElement).value;
+                  let numValue = parseInt(value, 10);
+                  let error = '';
+                  
+                  // 检查输入是否为空
+                  if (value === '') {
+                    // 设置错误，同时更新表单值为NaN，这样输入框会显示为空
+                    setNetworkForm({ ...networkForm, mbtcp_port: NaN });
+                    error = t('settings.error.port.required');
+                    setErrors({ ...errors, mbtcp_port: error });
+                    return;
+                  }
+                  
+                  // 检查输入是否为有效整数
+                  if (isNaN(numValue)) {
+                    // 保持当前值，设置错误
+                    error = t('settings.error.port.invalid');
+                    setErrors({ ...errors, mbtcp_port: error });
+                    return;
+                  }
+                  
+                  // 检查端口范围
+                  if (numValue < 500 || numValue > 65535) {
+                    error = t('settings.error.port.range');
+                  } else {
+                    error = '';
+                  }
+                  
+                  setNetworkForm({ ...networkForm, mbtcp_port: numValue });
+                  setErrors({ ...errors, mbtcp_port: error });
+                }}
+                class={`${inputClass} ${errors.mbtcp_port ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
               />
+              {errors.mbtcp_port && (
+                <p class="mt-1 text-xs text-red-500">{errors.mbtcp_port}</p>
+              )}
             </div>
             <div>
               <label class={labelClass}>{t('settings.network.customPort')}</label>
               <input
                 type="number"
-                value={networkForm.custom_port}
-                onChange={(e) => setNetworkForm({ ...networkForm, custom_port: Number((e.target as HTMLInputElement).value) })}
-                class={inputClass}
+                value={isNaN(networkForm.custom_port) ? '' : networkForm.custom_port}
+                onChange={(e) => {
+                  let value = (e.target as HTMLInputElement).value;
+                  let numValue = parseInt(value, 10);
+                  let error = '';
+                  
+                  // 检查输入是否为空
+                  if (value === '') {
+                    // 设置错误，同时更新表单值为NaN，这样输入框会显示为空
+                    setNetworkForm({ ...networkForm, custom_port: NaN });
+                    error = t('settings.error.port.required');
+                    setErrors({ ...errors, custom_port: error });
+                    return;
+                  }
+                  
+                  // 检查输入是否为有效整数
+                  if (isNaN(numValue)) {
+                    // 保持当前值，设置错误
+                    error = t('settings.error.port.invalid');
+                    setErrors({ ...errors, custom_port: error });
+                    return;
+                  }
+                  
+                  // 检查端口范围
+                  if (numValue < 500 || numValue > 65535) {
+                    error = t('settings.error.port.range');
+                  } else {
+                    error = '';
+                  }
+                  
+                  setNetworkForm({ ...networkForm, custom_port: numValue });
+                  setErrors({ ...errors, custom_port: error });
+                }}
+                class={`${inputClass} ${errors.custom_port ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
               />
+              {errors.custom_port && (
+                <p class="mt-1 text-xs text-red-500">{errors.custom_port}</p>
+              )}
             </div>
             <div class="md:col-span-3 flex gap-3 pt-4 border-t border-gray-100">
               <Button onClick={handleSaveNetwork} loading={saving} icon="💾">{t('common.save')}</Button>
-              <Button variant="secondary" onClick={() => setEditNetwork(false)} icon="❌">{t('common.cancel')}</Button>
+              <Button variant="secondary" onClick={() => {
+                setEditNetwork(false);
+                if (settings?.network) {
+                  setNetworkForm(settings.network);
+                }
+              }} icon="❌">{t('common.cancel')}</Button>
             </div>
           </div>
         )}

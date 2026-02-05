@@ -329,8 +329,8 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
 ```c
 static struct user s_users[] = {
-    {"admin", "admin123", "admin_token", PERM_ADMIN},
-    {"user",  "user123",  "user_token",  PERM_USER},
+    {"admin", "admin", "admin_token", PERM_ADMIN},
+    {"user",  "user",  "user_token",  PERM_USER},
     {"guest", "guest",    "guest_token", PERM_READONLY},
     {NULL, NULL, NULL, 0}
 };

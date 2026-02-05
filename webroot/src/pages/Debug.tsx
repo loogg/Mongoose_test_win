@@ -1,15 +1,44 @@
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useCallback } from 'preact/hooks';
 import { useI18n } from '../i18n';
 import { getDebug, updateDebug, saveDebug } from '../api';
 import { Card, Switch, Button, StatusBadge } from '../components/ui';
+import { useToast } from '../components/Toast';
 import type { DebugData } from '../types';
 
 export function DebugPage() {
   const { t } = useI18n();
+  const { showToast } = useToast();
   const [debug, setDebug] = useState<DebugData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [udpTargetIp, setUdpTargetIp] = useState('');
+  const [udpIpError, setUdpIpError] = useState('');
+
+  // 计算UDP目标IP的错误信息
+  const getUdpIpError = useCallback(() => {
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    let error = '';
+    
+    if (udpTargetIp === '') {
+      error = t('settings.error.ip.required');
+    } else if (!ipRegex.test(udpTargetIp)) {
+      error = t('settings.error.ip.format');
+    } else {
+      error = '';
+    }
+    
+    return error;
+  }, [udpTargetIp, t]);
+
+  // 当UDP目标IP变化时，更新错误信息
+  useEffect(() => {
+    setUdpIpError(getUdpIpError());
+  }, [udpTargetIp, getUdpIpError]);
+
+  // 当语言变化时，更新错误信息
+  useEffect(() => {
+    setUdpIpError(getUdpIpError());
+  }, [getUdpIpError]);
 
   useEffect(() => {
     loadDebug();
@@ -27,36 +56,109 @@ export function DebugPage() {
 
   const handleUpdateCli = async (key: keyof DebugData['cli'], value: boolean) => {
     setSaving(true);
-    await updateDebug({ cli: { [key]: value } } as Partial<DebugData>);
-    await loadDebug();
-    setSaving(false);
+    try {
+      await updateDebug({ cli: { [key]: value } } as Partial<DebugData>);
+      // 更新本地状态，让开关状态立即变化
+      if (debug) {
+        setDebug({
+          ...debug,
+          cli: {
+            ...debug.cli,
+            [key]: value
+          }
+        });
+      }
+      showToast(t('common.success'), 'success');
+    } catch (err) {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleUpdateUdpForward = async (key: keyof DebugData['udp_forward'], value: boolean) => {
     setSaving(true);
-    await updateDebug({ udp_forward: { [key]: value } } as Partial<DebugData>);
-    await loadDebug();
-    setSaving(false);
+    try {
+      await updateDebug({ udp_forward: { [key]: value } } as Partial<DebugData>);
+      // 更新本地状态，让开关状态立即变化
+      if (debug) {
+        setDebug({
+          ...debug,
+          udp_forward: {
+            ...debug.udp_forward,
+            [key]: value
+          }
+        });
+      }
+      showToast(t('common.success'), 'success');
+    } catch (err) {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleUpdateOpLog = async (key: keyof DebugData['op_log'], value: boolean) => {
     setSaving(true);
-    await updateDebug({ op_log: { [key]: value } } as Partial<DebugData>);
-    await loadDebug();
-    setSaving(false);
+    try {
+      await updateDebug({ op_log: { [key]: value } } as Partial<DebugData>);
+      // 更新本地状态，让开关状态立即变化
+      if (debug) {
+        setDebug({
+          ...debug,
+          op_log: {
+            ...debug.op_log,
+            [key]: value
+          }
+        });
+      }
+      showToast(t('common.success'), 'success');
+    } catch (err) {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleUpdateUdpTarget = async () => {
+    // 验证IP地址格式
+    const error = getUdpIpError();
+    
+    if (error) {
+      setUdpIpError(error);
+      showToast(error, 'error');
+      return;
+    }
+    
     setSaving(true);
-    await updateDebug({ udp_target_ip: udpTargetIp } as Partial<DebugData>);
-    await loadDebug();
-    setSaving(false);
+    try {
+      await updateDebug({ udp_target_ip: udpTargetIp } as Partial<DebugData>);
+      // 更新本地状态，让UDP目标IP立即变化
+      if (debug) {
+        setDebug({
+          ...debug,
+          udp_target_ip: udpTargetIp
+        });
+      }
+      showToast(t('common.success'), 'success');
+      setUdpIpError('');
+    } catch (err) {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveDebug = async () => {
     setSaving(true);
-    await saveDebug();
-    setSaving(false);
+    try {
+      await saveDebug();
+      showToast(t('common.success'), 'success');
+    } catch (err) {
+      showToast(t('common.error'), 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const udpForwardItems = [
@@ -146,14 +248,20 @@ export function DebugPage() {
       {/* UDP Target & CLI */}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card title={t('debug.udpTarget')} icon="📡">
-          <div class="flex gap-3">
+          <div class="flex flex-col gap-3">
             <input
               type="text"
               value={udpTargetIp}
-              onChange={(e) => setUdpTargetIp((e.target as HTMLInputElement).value)}
-              class="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg font-mono bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              onChange={(e) => {
+                const value = (e.target as HTMLInputElement).value;
+                setUdpTargetIp(value);
+              }}
+              class={`flex-1 px-4 py-2.5 border rounded-lg font-mono bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${udpIpError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-200'}`}
               placeholder="192.168.1.100"
             />
+            {udpIpError && (
+              <p class="text-xs text-red-500">{udpIpError}</p>
+            )}
             <Button onClick={handleUpdateUdpTarget} loading={saving} icon="✏️">
               {t('common.modify')}
             </Button>
