@@ -4,7 +4,8 @@ import { useAuth } from '../auth';
 import { getDashboard, getTool, syncTime } from '../api';
 import { useWebSocket } from '../components/WebSocket';
 import { Card, InfoRow, StatusBadge, Button, StatCard } from '../components/ui';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { MemoryChart } from '../components/MemoryChart';
+import { useToast } from '../components/Toast';
 import type { DashboardData, ToolInfo } from '../types';
 
 // 权限级别常量
@@ -14,6 +15,7 @@ export function DashboardPage() {
   const { t } = useI18n();
   const { user } = useAuth();
   const { status, updateStatus } = useWebSocket();
+  const { showToast } = useToast();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [tool, setTool] = useState<ToolInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +71,12 @@ export function DashboardPage() {
 
   const handleSyncTime = async () => {
     const timestamp = Math.floor(Date.now() / 1000);
-    await syncTime(timestamp);
+    try {
+      await syncTime(timestamp);
+      showToast(t('dashboard.syncTimeSuccess'), 'success');
+    } catch (error) {
+      showToast(t('dashboard.syncTimeFailed'), 'error');
+    }
   };
 
   const getToolStatus = (state: number): 'online' | 'offline' | 'connecting' => {
@@ -307,49 +314,14 @@ export function DashboardPage() {
         {/* SRAM Usage Curve */}
         <Card title={t('dashboard.memory.sram')} icon="📈">
           {status && memoryHistory.sram.length > 0 ? (
-            <div class="h-64 w-full bg-gradient-to-br from-blue-50 to-white rounded-lg p-4 shadow-sm">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={memoryHistory.sram}>
-                  <defs>
-                    <linearGradient id="sramColorGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e7ff" opacity={0.5} />
-                  <XAxis
-                    dataKey="timestamp"
-                    tick={{ fontSize: 10, fill: '#6b7280' }}
-                    tickFormatter={(timestamp) => {
-                      if (!status) return '';
-                      return formatTimeOnly(timestamp, status.tz_offset);
-                    }}
-                    interval="preserveStartEnd"
-                    axisLine={{ stroke: '#e5e7eb' }}
-                  />
-                  <YAxis domain={[0, 100]} tickCount={6} tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={{ stroke: '#e5e7eb' }} />
-                  <Tooltip
-                    formatter={(value) => [`${value}%`, t('dashboard.memory.usage')]}
-                    labelFormatter={(timestamp) => {
-                      if (!status) return '';
-                      return formatTime(timestamp, status.tz_offset);
-                    }}
-                    contentStyle={{ fontSize: 12, padding: '8px 12px', borderRadius: '6px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', backgroundColor: '#ffffff' }}
-                    itemStyle={{ color: '#3b82f6' }}
-                    labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    fill="url(#sramColorGradient)"
-                    fillOpacity={1}
-                    dot={{ r: 3, fill: '#3b82f6', stroke: '#ffffff', strokeWidth: 1 }}
-                    activeDot={{ r: 5, fill: '#3b82f6', stroke: '#ffffff', strokeWidth: 2 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div class="h-72 w-full bg-gradient-to-br from-blue-50 via-blue-100/30 to-white rounded-xl p-5 shadow-md border border-blue-100">
+              <MemoryChart
+                data={memoryHistory.sram.map((d, i) => ({ index: i, value: d.value, timestamp: d.timestamp }))}
+                color="rgb(59, 130, 246)"
+                label={t('dashboard.memory.sram')}
+                unit="%"
+                tzOffset={status.tz_offset}
+              />
             </div>
           ) : (
             <div class="flex items-center justify-center h-32">
@@ -361,49 +333,14 @@ export function DashboardPage() {
         {/* SDRAM Usage Curve */}
         <Card title={t('dashboard.memory.sdram')} icon="📈">
           {status && memoryHistory.sdram.length > 0 ? (
-            <div class="h-64 w-full bg-gradient-to-br from-green-50 to-white rounded-lg p-4 shadow-sm">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={memoryHistory.sdram}>
-                  <defs>
-                    <linearGradient id="sdramColorGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4}/>
-                      <stop offset="95%" stopColor="#22c55e" stopOpacity={0.1}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#dcfce7" opacity={0.5} />
-                  <XAxis
-                    dataKey="timestamp"
-                    tick={{ fontSize: 10, fill: '#6b7280' }}
-                    tickFormatter={(timestamp) => {
-                      if (!status) return '';
-                      return formatTimeOnly(timestamp, status.tz_offset);
-                    }}
-                    interval="preserveStartEnd"
-                    axisLine={{ stroke: '#e5e7eb' }}
-                  />
-                  <YAxis domain={[0, 100]} tickCount={6} tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={{ stroke: '#e5e7eb' }} />
-                  <Tooltip
-                    formatter={(value) => [`${value}%`, t('dashboard.memory.usage')]}
-                    labelFormatter={(timestamp) => {
-                      if (!status) return '';
-                      return formatTime(timestamp, status.tz_offset);
-                    }}
-                    contentStyle={{ fontSize: 12, padding: '8px 12px', borderRadius: '6px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', backgroundColor: '#ffffff' }}
-                    itemStyle={{ color: '#22c55e' }}
-                    labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#22c55e"
-                    strokeWidth={2}
-                    fill="url(#sdramColorGradient)"
-                    fillOpacity={1}
-                    dot={{ r: 3, fill: '#22c55e', stroke: '#ffffff', strokeWidth: 1 }}
-                    activeDot={{ r: 5, fill: '#22c55e', stroke: '#ffffff', strokeWidth: 2 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div class="h-72 w-full bg-gradient-to-br from-green-50 via-green-100/30 to-white rounded-xl p-5 shadow-md border border-green-100">
+              <MemoryChart
+                data={memoryHistory.sdram.map((d, i) => ({ index: i, value: d.value, timestamp: d.timestamp }))}
+                color="rgb(34, 197, 94)"
+                label={t('dashboard.memory.sdram')}
+                unit="%"
+                tzOffset={status.tz_offset}
+              />
             </div>
           ) : (
             <div class="flex items-center justify-center h-32">

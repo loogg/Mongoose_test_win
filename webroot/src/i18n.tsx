@@ -60,6 +60,8 @@ const translations = {
     'dashboard.memory.no_data': '暂无数据',
     'dashboard.time': '系统时间',
     'dashboard.syncTime': '同步时间',
+    'dashboard.syncTimeSuccess': '时间同步成功',
+    'dashboard.syncTimeFailed': '时间同步失败',
 
     // Settings
     'settings.system': '系统设置',
@@ -220,6 +222,8 @@ const translations = {
     'dashboard.memory.no_data': 'No Data',
     'dashboard.time': 'System Time',
     'dashboard.syncTime': 'Sync Time',
+    'dashboard.syncTimeSuccess': 'Time sync successful',
+    'dashboard.syncTimeFailed': 'Time sync failed',
 
     // Settings
     'settings.system': 'System Settings',
