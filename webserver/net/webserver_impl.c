@@ -26,11 +26,13 @@ void api_reply_ok(struct mg_connection *c, const char *data_json) {
 }
 
 void api_reply_fail(struct mg_connection *c, int code, const char *message) {
+    const char *fail_msg = message ? message : "";
+
     mg_http_reply(c, 200, s_json_header,
                   "{%m:false,%m:{%m:%d,%m:%m}}\n",
                   MG_ESC("ack"), MG_ESC("error"),
                   MG_ESC("code"), code,
-                  MG_ESC("message"), MG_ESC(message));
+                  MG_ESC("message"), MG_ESC(fail_msg));
 }
 
 // -----------------------------------------------------------------------------
