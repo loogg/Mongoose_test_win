@@ -42,23 +42,34 @@ export function LogPage() {
         // In simulator, this will fail gracefully
         window.open(`/api/log/download?name=${encodeURIComponent(log.name)}`, '_blank');
       } else {
-        // For memory type, download in chunks
-        let content = '';
+        // For memory type, download in chunks (binary data)
+        let chunks: Uint8Array[] = [];
         let offset = 0;
         const chunkSize = 1024;
 
         while (offset < log.size) {
-          const res = await downloadLogChunk(log.name, offset, chunkSize);
-          if (!res.ack || !res.data) break;
+          const buffer = await downloadLogChunk(log.name, offset, chunkSize);
+          if (buffer.byteLength === 0) break;
 
-          content += res.data.content;
-          offset += res.data.size;
+          const bytes = new Uint8Array(buffer);
+          chunks.push(bytes);
 
-          if (res.data.size < chunkSize) break; // Last chunk
+          offset += bytes.byteLength;
+
+          if (bytes.byteLength < chunkSize) break; // Last chunk
+        }
+
+        // Combine all chunks
+        const totalSize = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const combined = new Uint8Array(totalSize);
+        let position = 0;
+        for (const chunk of chunks) {
+          combined.set(chunk, position);
+          position += chunk.length;
         }
 
         // Create download
-        const blob = new Blob([content], { type: 'text/plain' });
+        const blob = new Blob([combined], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

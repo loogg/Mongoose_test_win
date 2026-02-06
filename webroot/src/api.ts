@@ -5,7 +5,6 @@ import type {
   SettingsData,
   DebugData,
   LogListData,
-  LogDownloadData,
   LoginResponse,
 } from './types';
 
@@ -128,10 +127,19 @@ export async function downloadLogChunk(
   name: string,
   offset: number,
   size: number = 1024
-): Promise<ApiResponse<LogDownloadData>> {
-  return request<LogDownloadData>(
-    `/api/log/download?name=${encodeURIComponent(name)}&offset=${offset}&size=${size}`
-  );
+): Promise<ArrayBuffer> {
+  const res = await fetch(`${API_BASE}/api/log/download?name=${encodeURIComponent(name)}&offset=${offset}&size=${size}`, {
+    credentials: 'include',
+  });
+
+  if (res.status === 401) {
+    // Clear user from localStorage, let AuthProvider handle redirect
+    localStorage.removeItem('user');
+    window.location.reload();
+    throw new Error('Unauthorized');
+  }
+
+  return res.arrayBuffer();
 }
 
 // Firmware API

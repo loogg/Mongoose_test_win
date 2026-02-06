@@ -145,12 +145,6 @@ export interface LogListData {
   logs: LogEntry[];
 }
 
-export interface LogDownloadData {
-  offset: number;
-  size: number;
-  content: string;
-}
-
 // Login response
 export interface LoginResponse {
   user: string;

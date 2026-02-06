@@ -694,7 +694,7 @@ static void handle_log_download(struct mg_connection *c,
     }
 
     if (content != NULL) {
-        // Memory log: return content chunk
+        // Memory log: return binary data directly
         int content_len = (int) strlen(content);
         if (offset >= content_len) {
             offset = content_len;
@@ -703,11 +703,17 @@ static void handle_log_download(struct mg_connection *c,
             size = content_len - offset;
         }
 
-        char json[2048];
-        mg_snprintf(json, sizeof(json),
-            "{\"offset\":%d,\"size\":%d,\"content\":%m}",
-            offset, size, mg_print_esc, size, content + offset);
-        api_reply_ok(c, json);
+        // Send HTTP headers first
+        mg_printf(c, "HTTP/1.1 200 OK\r\n"
+                     "Content-Type: application/octet-stream\r\n"
+                     "Content-Range: bytes %d-%d/%d\r\n"
+                     "Content-Length: %d\r\n"
+                     "\r\n",
+                 offset, offset + size - 1, content_len, size);
+
+        // Send binary data directly
+        mg_send(c, content + offset, (size_t) size);
+        c->is_resp = 0;
         return;
     }
 
