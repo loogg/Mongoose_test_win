@@ -75,7 +75,13 @@ if ($Mode -eq "prod") {
     # Collect all files using glob patterns (PowerShell style)
     $distFiles = Get-ChildItem "webroot/dist" -Recurse -File | ForEach-Object {
         $rel = $_.FullName.Replace("$PWD\", "").Replace("\", "/")
-        "$($rel):web_root/$($rel.Replace('webroot/dist/', '')):gzip"
+        $fileName = Split-Path $rel -Leaf
+        # Skip gzip for index.html
+        if ($fileName -ne "index.html") {
+            "$($rel):web_root/$($rel.Replace('webroot/dist/', '')):gzip"
+        } else {
+            "$($rel):web_root/$($rel.Replace('webroot/dist/', ''))"
+        }
     }
 
     $certFiles = @()

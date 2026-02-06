@@ -137,14 +137,9 @@ void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
         // Static files
         else {
             struct mg_http_serve_opts opts = {0};
-#if !defined(BUILD_PACKED_FS)
-#if !defined(WEBSERVER_USER)
-            opts.root_dir = "/webroot/dist";  // Development: use filesystem
-#else
-            opts.root_dir = "/webroot";  // Development: use filesystem
-#endif
-#else
-            opts.root_dir = "/web_root";     // Embedded: use packed files
+            opts.root_dir = WEBSERVER_ROOT;
+            opts.page404 = WEBSERVER_PAGE404;
+#if defined(BUILD_PACKED_FS)
             opts.fs = &mg_fs_packed;
 #endif
             mg_http_serve_dir(c, hm, &opts);

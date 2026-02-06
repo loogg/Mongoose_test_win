@@ -6,6 +6,8 @@ project(example)
 if(DEFINED ENV{BUILD_PACKED_FS})
     add_definitions(-DMG_ENABLE_PACKED_FS=1)
     add_definitions(-DBUILD_PACKED_FS=1)
+    add_definitions(-DWEBSERVER_ROOT="/web_root")
+    add_definitions(-DWEBSERVER_PAGE404="/web_root/index.html")
     set(MG_ENABLE_PACKED_FS 1)
 endif()
 

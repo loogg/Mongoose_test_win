@@ -8,6 +8,14 @@
 extern "C" {
 #endif
 
+#ifndef WEBSERVER_ROOT
+#define WEBSERVER_ROOT "/webroot/dist"
+#endif
+
+#ifndef WEBSERVER_PAGE404
+#define WEBSERVER_PAGE404 "/webroot/dist/index.html"
+#endif
+
 // -----------------------------------------------------------------------------
 // User structure for authentication
 // -----------------------------------------------------------------------------
