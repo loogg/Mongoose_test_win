@@ -130,7 +130,7 @@ export function FirmwarePage() {
           clearTimeout(reconnectTimerRef.current);
           reconnectTimerRef.current = null;
         }
-        window.location.href = '/';
+        window.location.reload();
         return;
       } catch {
         // Still disconnected
