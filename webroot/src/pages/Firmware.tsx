@@ -123,20 +123,15 @@ export function FirmwarePage() {
       attempts++;
       try {
         // Use /api/dashboard to check if device is back online
-        const res = await fetch('/api/dashboard');
-        if (res.ok) {
-          // Connection restored
-          if (reconnectTimerRef.current) {
-            clearTimeout(reconnectTimerRef.current);
-            reconnectTimerRef.current = null;
-          }
-          setState('idle');
-          // Prompt user to refresh
-          if (confirm(t('firmware.reconnected'))) {
-            window.location.reload();
-          }
-          return;
+        await fetch('/api/dashboard');
+        // Any response means device is back online (even 401 means token changed)
+        // Redirect to homepage to let user re-login
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current);
+          reconnectTimerRef.current = null;
         }
+        window.location.href = '/';
+        return;
       } catch {
         // Still disconnected
       }
