@@ -66,23 +66,29 @@ if [ "$MODE" = "prod" ]; then
     info "Packing frontend files..."
     cd "$PROJECT_ROOT"
 
-    # Collect all files recursively from dist
+    # Collect all files recursively from dist (Bash style)
     DIST_FILES=()
-    while IFS= read -r -d '' file; do
+    find webroot/dist -type f | while read -r file; do
         rel="${file#webroot/dist/}"
-        DIST_FILES+=("$file:web_root/$rel")
-    done < <(find webroot/dist -type f -print0)
+        filename=$(basename "$file")
+        # Skip gzip for index.html
+        if [ "$filename" != "index.html" ]; then
+            DIST_FILES+=("$rel:web_root/$rel:gzip")
+        else
+            DIST_FILES+=("$rel:web_root/$rel")
+        fi
+    done
 
     # Add cert files if exist
     CERT_FILES=()
     if [ -d "certs" ]; then
-        while IFS= read -r -d '' file; do
-            name="$(basename "$file")"
-            CERT_FILES+=("$file:certs/$name")
-        done < <(find certs -maxdepth 1 -type f -print0)
+        find certs -type f | while read -r file; do
+            name=$(basename "$file")
+            CERT_FILES+=("certs/$name:certs/$name")
+        done
     fi
 
-    # Run pack.js with all files
+    # Run pack.js with all file arguments
     node pack.js "${DIST_FILES[@]}" "${CERT_FILES[@]}" > webserver/net/webserver_packedfs.c
     ok "Packed to webserver/net/webserver_packedfs.c"
 else
